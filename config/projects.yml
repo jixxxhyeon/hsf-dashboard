@@ -32,14 +32,24 @@
 #   repos:
 #     - HandongSF/실제저장소이름
 
-# - slug: histudy
-#   name: histudy
-#   description: 스터디 그룹 관리
-#   category: tooling
-#   status: active
-#   startedOn: 2023-09-01
-#   repos:
-#     - HandongSF/실제저장소이름
+- slug: histudy
+  name: histudy
+  description: 스터디 그룹 관리
+  category: tooling
+  status: active
+  startedOn: 2023-09-01
+  repos:
+    - HandongSF/histudy-fe
+    - HandongSF/histudy-be
+
+- slug: sllmates
+  name: sLLMates
+  description: ""
+  category: tooling
+  status: active
+  startedOn: 2025-01-01
+  repos:
+    - HandongSF/sLLMates
 
 # - slug: docs-main
 #   name: Docs-Main

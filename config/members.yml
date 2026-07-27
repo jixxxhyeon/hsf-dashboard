@@ -5,6 +5,32 @@
 # needsReview 가 붙은 항목은 사람이 확인해야 합니다. 확인 후 그 줄을 지우세요.
 # GitHub에 없는 정보: 학과, 확정된 한글 이름, 기술 태그, 공식 역할
 #
+- github: chatgpt-codex-connector
+  nameKo: ChatGPT Codex (봇)
+  status: excluded
+- github: Cocomong98
+  nameKo: Kim yong hyeon
+  nameEn: Kim yong hyeon
+  location: Handong Global Univ.
+  bio: ""
+  role: contributor
+  primaryProject: histudy
+  status: active
+  joinedOn: 2025-08-30
+  avatarUrl: https://avatars.githubusercontent.com/u/90203932?u=71275f7561ea2f43ac86693ebd00e5ed48ef17ae&v=4
+  githubId: 90203932
+  githubCreatedAt: 2021-09-06
+  needsReview:
+    - department
+    - studentNo
+    - role
+    - nameKo
+- github: coderabbitai
+  nameKo: CodeRabbit (봇)
+  status: excluded
+- github: copilot-pull-request-reviewer
+  nameKo: Copilot Reviewer (봇)
+  status: excluded
 - github: ehdrb01
   nameKo: 김동규
   nameEn: Donggyu Kim
@@ -18,7 +44,12 @@
   avatarUrl: https://avatars.githubusercontent.com/u/130060480?v=4
   githubId: 130060480
   githubCreatedAt: 2023-04-06
- 
+  needsReview:
+    - department
+    - studentNo
+- github: gemini-code-assist
+  nameKo: Gemini (봇)
+  status: excluded
 - github: hyeokkiyaa
   nameKo: 권혁민
   nameEn: Hyeokmin Kwon
@@ -37,7 +68,26 @@
   aliases:
     emails:
       - khm38607574@gmail.com
-  
+  needsReview:
+    - department
+    - studentNo
+- github: Jaeslim
+  nameKo: Jaeslim
+  role: committer
+  primaryProject: sllmates
+  status: active
+  joinedOn: 2025-10-13
+  avatarUrl: https://avatars.githubusercontent.com/u/203327047?v=4
+  githubId: 203327047
+  githubCreatedAt: 2025-03-14
+  aliases:
+    emails:
+      - wotjd1470@naver.com
+  needsReview:
+    - department
+    - studentNo
+    - role
+    - nameKo
 - github: jixxxhyeon
   nameKo: 여지현
   studentNo: "22400437"
@@ -52,7 +102,57 @@
   aliases:
     emails:
       - 22400437@handong.ac.kr
-  
+  needsReview:
+    - department
+- github: Joshuaii3712
+  nameKo: Joshuaii3712
+  role: committer
+  primaryProject: sllmates
+  status: active
+  joinedOn: 2025-08-19
+  avatarUrl: https://avatars.githubusercontent.com/u/162775297?v=4
+  githubId: 162775297
+  githubCreatedAt: 2024-03-09
+  aliases:
+    emails:
+      - joshuaii3712@gmail.com
+  needsReview:
+    - department
+    - studentNo
+    - role
+    - nameKo
+- github: Leo1010246
+  nameKo: Leo1010246
+  role: maintainer
+  primaryProject: sllmates
+  status: active
+  joinedOn: 2025-10-13
+  avatarUrl: https://avatars.githubusercontent.com/u/53553877?v=4
+  githubId: 53553877
+  githubCreatedAt: 2019-08-01
+  aliases:
+    emails:
+      - leocho1126@gmail.com
+  needsReview:
+    - department
+    - studentNo
+    - role
+    - nameKo
+- github: minzziPark
+  nameKo: minzziPark
+  nameEn: minzziPark
+  bio: Software Engineer
+  role: contributor
+  status: active
+  joinedOn: 2025-10-22
+  avatarUrl: https://avatars.githubusercontent.com/u/86656147?u=9392fa60b9d2dfd95956123addec357fcaa3b04c&v=4
+  githubId: 86656147
+  githubCreatedAt: 2021-06-29
+  needsReview:
+    - department
+    - studentNo
+    - role
+    - nameKo
 - github: nayeawon
   nameKo: 나예원
   nameEn: Yeawon Na
@@ -63,4 +163,45 @@
   avatarUrl: https://avatars.githubusercontent.com/u/80326384?u=fe8a3580403abc7cb06ddd470255e13bfcb8f45b&v=4
   githubId: 80326384
   githubCreatedAt: 2021-03-09
- 
+  needsReview:
+    - department
+    - studentNo
+- github: ohinhyuk
+  nameKo: Inhyuk Oh
+  nameEn: Inhyuk Oh
+  bio: Ian-52
+  role: maintainer
+  primaryProject: histudy
+  status: active
+  joinedOn: 2025-06-20
+  avatarUrl: https://avatars.githubusercontent.com/u/49269218?u=8b48e60288e1c90551e32aaefa9f275f941bf6a9&v=4
+  githubId: 49269218
+  githubCreatedAt: 2019-04-04
+  aliases:
+    emails:
+      - 8156217@naver.com
+  needsReview:
+    - department
+    - studentNo
+    - role
+    - nameKo
+- github: zionhann
+  nameKo: 한시온
+  nameEn: 한시온
+  location: Seoul, South Korea
+  bio: ""
+  role: committer
+  primaryProject: histudy
+  status: active
+  joinedOn: 2025-06-19
+  avatarUrl: https://avatars.githubusercontent.com/u/45687157?u=1e73ee5c7d5dc22a3298840f2dfebc596d2c15c5&v=4
+  githubId: 45687157
+  githubCreatedAt: 2018-12-07
+  aliases:
+    emails:
+      - its.zionhan@gmail.com
+  needsReview:
+    - department
+    - studentNo
+    - role
+    - nameKo
