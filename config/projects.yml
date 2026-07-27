@@ -1,0 +1,51 @@
+# HSF가 관리하는 프로젝트 목록
+# 프로젝트 1개 : 저장소 N개 (GitHub에는 이 묶음 개념이 없으므로 여기서 정의)
+
+- slug: jchecker-engine
+  name: jChecker-Engine
+  description: 자동 채점 엔진
+  category: education
+  status: active           # incubating | active | maintenance | archived
+  startedOn: 2024-03-01
+  repos:
+    - hsf-foundation/jchecker-engine
+    - hsf-foundation/jchecker-cli
+
+- slug: hsf-auth-core
+  name: HSF-Auth-Core
+  description: 통합 인증 코어
+  category: infra
+  status: active
+  startedOn: 2024-09-01
+  repos:
+    - hsf-foundation/auth-core
+    - hsf-foundation/cloud-identity-mesh
+
+- slug: core-engine
+  name: Core Engine v2.0
+  description: 코어 스케줄러 / 데이터 게이트웨이
+  category: infra
+  status: active
+  startedOn: 2025-03-01
+  repos:
+    - hsf-foundation/core-engine
+    - hsf-foundation/monitor
+    - hsf-foundation/data-gate
+
+- slug: histudy
+  name: histudy
+  description: 스터디 그룹 관리
+  category: tooling
+  status: active
+  startedOn: 2023-09-01
+  repos:
+    - hsf-foundation/histudy
+
+- slug: docs-main
+  name: Docs-Main
+  description: 공식 문서
+  category: docs
+  status: maintenance
+  startedOn: 2024-01-01
+  repos:
+    - hsf-foundation/docs

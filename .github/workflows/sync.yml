@@ -1,0 +1,56 @@
+name: sync
+
+# "백엔드"가 여기 있다. 서버도 DB도 없다.
+on:
+  schedule:
+    - cron: '7 * * * *'      # 매시 7분 (정각은 러너가 붐빈다)
+  workflow_dispatch:          # 수동 실행 버튼
+  push:
+    paths: ['config/**']      # 회원/프로젝트 정보를 고치면 즉시 재생성
+
+concurrency:
+  group: sync
+  cancel-in-progress: false   # 집계 도중 취소되면 반쪽 데이터가 커밋된다
+
+permissions:
+  contents: write
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+
+      - name: Collect & aggregate
+        env:
+          # 기본 GITHUB_TOKEN은 저장소당 1,000회/시간이고 다른 repo를 못 읽는다.
+          # org 전체를 읽으려면 GitHub App 설치 토큰이나 fine-grained PAT을 Secret에 넣어라.
+          GITHUB_TOKEN: ${{ secrets.HSF_SYNC_TOKEN }}
+        run: node scripts/sync.mjs --days 400
+
+      - name: Commit data
+        run: |
+          git config user.name  "hsf-bot"
+          git config user.email "hsf-bot@users.noreply.github.com"
+          git add data
+          if git diff --staged --quiet; then
+            echo "변경 없음"
+          else
+            git commit -m "chore(data): sync $(date -u +%Y-%m-%dT%H:%MZ)"
+            git push
+          fi
+
+      # data/ 를 그대로 GitHub Pages로 서빙하면 별도 스토리지도 필요 없다
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: data
+          path: data/
+          retention-days: 7

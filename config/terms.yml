@@ -1,0 +1,18 @@
+# 학기 정의. Rankings 화면의 "This Semester | All Time" 토글이 여기서 나온다.
+# current: true 인 학기가 기본 선택된다. (정확히 하나만)
+
+- code: 2025-2
+  name: 2025학년도 2학기
+  startsOn: 2025-09-01
+  endsOn: 2025-12-20
+
+- code: 2026-1
+  name: 2026학년도 1학기
+  startsOn: 2026-03-02
+  endsOn: 2026-06-19
+
+- code: 2026-S
+  name: 2026 여름학기
+  startsOn: 2026-06-22
+  endsOn: 2026-08-14
+  current: true

@@ -1,0 +1,62 @@
+# GitHub에 없는 정보. 이 파일이 사실상 HSF의 "회원 DB"다.
+# 수정은 PR로 → 리뷰·이력·롤백이 공짜로 딸려온다.
+#
+# github:  GitHub login (필수, 유일 키)
+# aliases: 같은 사람의 다른 계정 / 커밋 email (선택)
+# role:    maintainer | committer | contributor | mentor
+# primaryProject: projects.yml 의 slug
+
+- github: handong-dev
+  nameKo: 김한동
+  nameEn: Handong Kim
+  studentNo: "22400437"
+  department: Computer Science Engineering
+  location: Seoul, South Korea
+  skills: [BACKEND, CLOUD NATIVE, GO]
+  role: committer
+  primaryProject: core-engine
+  joinedOn: 2024-03-02
+  status: active            # active | inactive | alumni
+  aliases:
+    emails: [handong@example.ac.kr]
+
+- github: asokolov
+  nameKo: Alex Sokolov
+  nameEn: Alex Sokolov
+  department: Computer Science Engineering
+  skills: [JAVA, COMPILER]
+  role: maintainer
+  primaryProject: jchecker-engine
+  joinedOn: 2023-09-01
+  status: active
+
+- github: mrialoz
+  nameKo: Maria Lopez
+  nameEn: Maria Lopez
+  department: Information Technology
+  role: committer
+  primaryProject: histudy
+  joinedOn: 2024-03-02
+  status: active
+
+- github: jhuang_dev
+  nameKo: Jordan Huang
+  nameEn: Jordan Huang
+  role: committer
+  primaryProject: jchecker-engine
+  joinedOn: 2024-09-01
+  status: active
+
+- github: dk_coder
+  nameKo: David Kim
+  nameEn: David Kim
+  role: contributor
+  primaryProject: histudy
+  joinedOn: 2025-03-03
+  status: active
+
+# 집계에서 제외할 계정 (봇, 조직 계정 등)
+# status: excluded 로 두면 랭킹·통계에서 빠지되 이력은 남는다
+- github: dependabot[bot]
+  nameKo: Dependabot
+  status: excluded

@@ -1,0 +1,17 @@
+{
+  "name": "hsf-dashboard-sync",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "sync": "node scripts/sync.mjs",
+    "sync:dry": "node scripts/sync.mjs --dry",
+    "test": "node scripts/test.mjs"
+  },
+  "dependencies": {
+    "yaml": "^2.9.0"
+  }
+}

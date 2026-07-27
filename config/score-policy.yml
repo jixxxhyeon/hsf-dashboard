@@ -1,0 +1,46 @@
+# 점수 정책. 이 파일을 바꾸면 순위가 통째로 바뀌므로 반드시 PR + version 증가.
+# data/meta.json 에 version이 박히므로 "언제 정책이 바뀌었는지" 추적된다.
+
+version: 1
+effectiveFrom: 2026-03-01
+note: 초기 정책. 리뷰 가중치를 높게 잡아 코드 리뷰 문화를 유도한다.
+
+weights:
+  commit: 1
+  prOpened: 2
+  prMerged: 5
+  review: 3          # 리뷰가 커밋보다 3배 — 의도적
+  issueOpened: 1
+  issueClosed: 2
+
+# 어뷰징 방지 상한. 랭킹 시스템은 반드시 게임화된다.
+caps:
+  dailyCommits: 20           # 하루 21번째 커밋부터 점수 없음
+  dailyReviews: 15
+  additionsPerCommit: 2000   # 이 이상은 라인 통계에서 잘라냄
+
+# 집계에서 제외할 항목
+exclude:
+  mergeCommits: true         # merge commit은 커밋으로 세지 않음
+  selfReviews: true          # 자기 PR 셀프 승인 제외
+  bots: true
+  # 이 패턴만 바뀐 커밋은 제외 (lock 파일 한 번에 +30,000줄 방지)
+  paths:
+    - "**/package-lock.json"
+    - "**/yarn.lock"
+    - "**/pnpm-lock.yaml"
+    - "**/go.sum"
+    - "vendor/**"
+    - "dist/**"
+    - "build/**"
+    - "**/*.min.js"
+
+# 라인 수는 "표시만" 하고 점수에는 반영하지 않는다.
+# 반영하면 코드를 길게 쓰는 인센티브가 생긴다.
+linesAffectScore: false
+
+# 활동 상태 판정 (관리 목적의 핵심 지표)
+status:
+  activeDays: 30       # 최근 30일 내 기여가 있으면 active
+  slowingDropPct: 50   # 직전 30일 대비 50% 이상 감소하면 slowing
+  dormantDays: 60      # 60일간 기여 0이면 dormant
