@@ -3,7 +3,7 @@ name: sync
 # "백엔드"가 여기 있다. 서버도 DB도 없다.
 on:
   schedule:
-    - cron: '7 * * * *'      # 매시 7분 (정각은 러너가 붐빈다)
+    - cron: '7 */6 * * *'    # 6시간마다 (private 저장소 무료 한도 보호)
   workflow_dispatch:          # 수동 실행 버튼
   push:
     paths: ['config/**']      # 회원/프로젝트 정보를 고치면 즉시 재생성
