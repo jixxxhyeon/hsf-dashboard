@@ -1,0 +1,42 @@
+spring:
+  application:
+    name: hsf-dashboard
+
+  datasource:
+    url: jdbc:postgresql://localhost:5432/hsf_dashboard
+    username: ${DB_USER:yeojihyeon}      # 맥 Homebrew 는 기본 계정이 macOS 사용자명
+    password: ${DB_PASSWORD:}            # 로컬은 비밀번호 없음
+    driver-class-name: org.postgresql.Driver
+
+  jpa:
+    open-in-view: false                  # 뷰에서 지연로딩 금지 (N+1 방지)
+    hibernate:
+      ddl-auto: validate                 # 스키마는 Flyway 가 만든다. JPA 는 검증만.
+    properties:
+      hibernate:
+        jdbc:
+          time_zone: Asia/Seoul
+
+  flyway:
+    enabled: true
+    locations: classpath:db/migration
+
+  jackson:
+    default-property-inclusion: non_null
+
+server:
+  port: 8080
+
+# ── 이 프로젝트 전용 설정 ────────────────────────────────────────
+hsf:
+  github:
+    api-url: https://api.github.com/graphql
+    token: ${HSF_SYNC_TOKEN:}            # 터미널 환경변수로 넣는다. 파일에 적지 말 것.
+  sync:
+    enabled: false                       # 스케줄러는 동기화 코드 완성 후에 켠다
+    cron: "0 0 */6 * * *"                # 6시간마다
+    overlap-days: 1                      # 마지막 동기화 시점보다 1일 앞에서부터 다시 훑는다
+
+logging:
+  level:
+    net.lifove.hsf.dashboard: debug
