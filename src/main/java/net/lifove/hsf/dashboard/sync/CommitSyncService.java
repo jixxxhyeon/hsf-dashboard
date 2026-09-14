@@ -9,6 +9,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.OffsetDateTime;
+import java.time.ZoneOffset;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -73,7 +74,7 @@ public class CommitSyncService {
     /** 등록된 저장소 전부 동기화. 하나가 실패해도 나머지는 계속 진행한다. */
     public Map<String, Object> syncAll() {
         List<Map<String, Object>> repos = jdbc.queryForList(
-                "SELECT id, owner, name, last_synced_at FROM repository ORDER BY id");
+                "SELECT id, owner, name, last_synced_at FROM repository WHERE NOT excluded ORDER BY id");
 
         int total = 0;
         List<String> failed = new ArrayList<>();
@@ -84,7 +85,7 @@ public class CommitSyncService {
                         ((Number) r.get("id")).longValue(),
                         (String) r.get("owner"),
                         (String) r.get("name"),
-                        (OffsetDateTime) r.get("last_synced_at"));
+                        toOffset(r.get("last_synced_at")));
             } catch (Exception e) {
                 log.error("동기화 실패: {}", full, e);
                 failed.add(full + " — " + e.getMessage());
@@ -115,7 +116,10 @@ public class CommitSyncService {
                 Map<String, Object> vars = new HashMap<>();
                 vars.put("owner", owner);
                 vars.put("name", name);
-                vars.put("since", since.toString());
+                // toInstant() 를 거치는 이유: OffsetDateTime.toString() 은 초가 0이면 초를 생략해
+                // "2000-01-01T00:00Z" 를 만드는데, GitHub 의 GitTimestamp 는 이 형식을 거부한다.
+                // Instant.toString() 은 항상 초를 포함한다.
+                vars.put("since", since.toInstant().toString());
                 vars.put("cursor", cursor);
 
                 Map<String, Object> data = github.query(HISTORY_QUERY, vars);
@@ -228,6 +232,20 @@ public class CommitSyncService {
                        AND student_id IS NULL
                     """, m.group(1), accountId);
         }
+    }
+
+    /**
+     * timestamptz 컬럼이 드라이버에 따라 java.sql.Timestamp 로도, OffsetDateTime 으로도 온다.
+     * 어느 쪽이든 받아서 OffsetDateTime 으로 맞춘다.
+     */
+    private static OffsetDateTime toOffset(Object v) {
+        if (v == null) return null;
+        if (v instanceof OffsetDateTime o) return o;
+        if (v instanceof java.sql.Timestamp t) return t.toInstant().atOffset(ZoneOffset.UTC);
+        if (v instanceof java.time.Instant i) return i.atOffset(ZoneOffset.UTC);
+        if (v instanceof java.util.Date d) return d.toInstant().atOffset(ZoneOffset.UTC);
+        log.warn("last_synced_at 값을 해석할 수 없어 전체 이력을 다시 가져옵니다: {}", v.getClass());
+        return null;
     }
 
     private static String trim(String s, int max) {
