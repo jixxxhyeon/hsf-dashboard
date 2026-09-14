@@ -14,8 +14,6 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 
 import static net.lifove.hsf.dashboard.sync.Json.*;
 
@@ -29,9 +27,6 @@ import static net.lifove.hsf.dashboard.sync.Json.*;
 public class CommitSyncService {
 
     private static final Logger log = LoggerFactory.getLogger(CommitSyncService.class);
-
-    /** 학번은 커밋 이메일에서 뽑는다: 22400437@handong.ac.kr → 22400437 */
-    private static final Pattern STUDENT_ID = Pattern.compile("^(\\d{8})@handong\\.ac\\.kr$");
 
     private static final String HISTORY_QUERY = """
         query($owner:String!, $name:String!, $since:GitTimestamp!, $cursor:String) {
@@ -214,24 +209,13 @@ public class CommitSyncService {
                 Long.class, login, githubId, bot);
     }
 
-    /** 이메일을 계정에 붙이고, 학교 메일이면 학번도 채운다. */
+    /** 같은 사람의 다른 커밋을 나중에 알아보기 위해 이메일을 계정에 붙여둔다. */
     private void linkEmail(String email, Long accountId) {
         if (email == null || email.isBlank() || accountId == null) return;
-
         jdbc.update("""
                 INSERT INTO commit_email (email, account_id) VALUES (?,?)
                 ON CONFLICT (email) DO NOTHING
                 """, email, accountId);
-
-        Matcher m = STUDENT_ID.matcher(email);
-        if (m.matches()) {
-            // 이미 들어 있는 학번은 덮어쓰지 않는다 (사람이 고쳐둔 값 보호)
-            jdbc.update("""
-                    UPDATE member SET student_id = ?
-                     WHERE id = (SELECT member_id FROM github_account WHERE id = ?)
-                       AND student_id IS NULL
-                    """, m.group(1), accountId);
-        }
     }
 
     /**

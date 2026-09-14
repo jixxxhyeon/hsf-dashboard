@@ -1,0 +1,1032 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>HSF Dashboard</title>
+<style>
+:root{
+  color-scheme:light;
+  --ink:#0f172a; --ink2:#334155; --muted:#64748b; --muted2:#94a3b8;
+  --line:#e2e8f0; --line2:#f1f5f9; --bg:#f8fafc; --card:#fff; --hover:#fafbfe;
+  --accent:#1d4ed8; --accent-soft:#eff6ff; --accent-line:#bfdbfe;
+  --warn:#b45309; --warn-soft:#fffbeb; --warn-line:#fde68a;
+  --pos:#15803d; --neg:#b91c1c;
+  /* 데이터 색 — dataviz 레퍼런스 팔레트(검증 통과) */
+  --surface-1:#ffffff;
+  --series-1:#2a78d6;   /* histudy */
+  --series-2:#eb6834;   /* jChecker-Engine */
+  --series-3:#1baf7a;   /* sLLMates */
+  --hm-0:#eceff3; --hm-1:#cde2fb; --hm-2:#86b6ef; --hm-3:#3987e5; --hm-4:#1c5cab;
+  --grid:#eef2f7;
+  --st-active:#15803d; --st-active-bg:#f0fdf4; --st-active-line:#bbf7d0;
+  --st-slow:#b45309;   --st-slow-bg:#fffbeb;  --st-slow-line:#fde68a;
+  --st-dorm:#64748b;   --st-dorm-bg:#f8fafc;  --st-dorm-line:#e2e8f0;
+  --r:12px;
+}
+@media (prefers-color-scheme:dark){
+  :root:where(:not([data-theme="light"])){
+    color-scheme:dark;
+    --ink:#f1f5f9; --ink2:#cbd5e1; --muted:#94a3b8; --muted2:#64748b;
+    --line:#2b3444; --line2:#222a37; --bg:#12151c; --card:#1a1f29; --hover:#20262f;
+    --accent:#7ea8ff; --accent-soft:#1c2739; --accent-line:#2f4a7a;
+    --warn:#fbbf24; --warn-soft:#2a2213; --warn-line:#4d3d16;
+    --pos:#4ade80; --neg:#f87171;
+    --surface-1:#1a1f29;
+    --series-1:#3987e5; --series-2:#d95926; --series-3:#199e70;
+    --hm-0:#232a36; --hm-1:#184f95; --hm-2:#256abf; --hm-3:#3987e5; --hm-4:#86b6ef;
+    --grid:#242c3a;
+    --st-active:#4ade80; --st-active-bg:#132218; --st-active-line:#20402a;
+    --st-slow:#fbbf24;   --st-slow-bg:#2a2213;  --st-slow-line:#4d3d16;
+    --st-dorm:#94a3b8;   --st-dorm-bg:#1e242e;  --st-dorm-line:#2b3444;
+  }
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{
+  font:14px/1.55 -apple-system,BlinkMacSystemFont,'Pretendard','Apple SD Gothic Neo','Segoe UI',Roboto,'Noto Sans KR',sans-serif;
+  background:var(--bg); color:var(--ink); -webkit-font-smoothing:antialiased;
+}
+.num{font-variant-numeric:tabular-nums;font-feature-settings:"tnum"}
+.mono{font-family:ui-monospace,SFMono-Regular,'SF Mono',Menlo,monospace;font-size:12.5px}
+button,input,select{font:inherit;color:inherit}
+a{color:inherit;text-decoration:none}
+
+/* ══ 앱 셸 ══ */
+.app{display:grid;grid-template-columns:216px 1fr;min-height:100vh}
+.side{background:var(--card);border-right:1px solid var(--line);
+      display:flex;flex-direction:column;padding:18px 12px;position:sticky;top:0;height:100vh}
+.brand{padding:4px 10px 2px;font-size:16px;font-weight:800;letter-spacing:-.3px}
+.brand span{color:var(--accent)}
+.brand small{display:block;font-size:9.5px;font-weight:700;color:var(--muted2);
+             letter-spacing:1px;margin-top:3px}
+.navsec{margin-top:22px;font-size:10.5px;font-weight:800;color:var(--muted2);
+        letter-spacing:.9px;padding:0 10px 7px}
+nav{display:flex;flex-direction:column;gap:2px}
+nav a{display:flex;align-items:center;gap:10px;padding:8px 10px;border-radius:8px;
+      font-size:13.5px;font-weight:600;color:var(--ink2)}
+nav a:hover{background:var(--line2)}
+nav a.on{background:var(--accent-soft);color:var(--accent)}
+nav svg{width:16px;height:16px;flex:none;stroke:currentColor;fill:none;stroke-width:1.8;
+        stroke-linecap:round;stroke-linejoin:round}
+.sidefoot{margin-top:auto;padding:10px;font-size:11px;color:var(--muted2);line-height:1.5}
+
+.mainarea{min-width:0;display:flex;flex-direction:column}
+.top{background:var(--card);border-bottom:1px solid var(--line);padding:13px 26px;
+     display:flex;align-items:center;gap:12px;position:sticky;top:0;z-index:15}
+.top h1{font-size:15.5px;font-weight:700}
+.top .sub{font-size:12.5px;color:var(--muted)}
+.top .right{margin-left:auto;display:flex;gap:8px}
+.wrap{padding:20px 26px 60px;display:flex;flex-direction:column;gap:14px;max-width:1240px}
+
+/* ══ 공통 ══ */
+.card{background:var(--card);border:1px solid var(--line);border-radius:var(--r)}
+.card-hd{display:flex;align-items:center;gap:10px;padding:14px 18px 0}
+.card-hd h2{font-size:13.5px;font-weight:700}
+.card-hd .hint{margin-left:auto}
+.hint{font-size:12px;color:var(--muted)}
+.btn{border:1px solid var(--line);background:var(--card);border-radius:8px;padding:7px 13px;
+     font-size:13px;font-weight:600;color:var(--ink2);cursor:pointer;white-space:nowrap}
+.btn:hover{background:var(--line2)}
+.btn.sm{padding:4px 9px;font-size:12px}
+.chip{border:1px solid var(--line);background:var(--card);border-radius:999px;padding:6px 13px;
+      font-size:12.5px;font-weight:600;color:var(--ink2);cursor:pointer}
+.chip:hover{background:var(--line2)}
+.chip.on{background:var(--accent-soft);border-color:var(--accent-line);color:var(--accent)}
+.row{display:flex;align-items:center;gap:9px;flex-wrap:wrap}
+.row > label.k{font-size:12px;font-weight:700;color:var(--muted);min-width:62px}
+input[type=date],input[type=number],input[type=search]{
+  border:1px solid var(--line);border-radius:8px;padding:7px 10px;font-size:13px;
+  background:var(--card);font-variant-numeric:tabular-nums}
+input:focus{outline:none;border-color:var(--accent)}
+.filterbar{padding:14px 18px;display:flex;flex-direction:column;gap:12px}
+
+/* ══ 스탯 타일 ══ */
+.tiles{display:grid;grid-template-columns:repeat(4,1fr);gap:0;overflow:hidden}
+.tile{padding:15px 18px;border-right:1px solid var(--line2)}
+.tile:last-child{border-right:0}
+.tile .l{font-size:11.5px;font-weight:700;color:var(--muted);letter-spacing:.3px}
+.tile .v{font-size:24px;font-weight:800;letter-spacing:-.6px;margin-top:2px}  /* 히어로 숫자는 비례 폭 */
+.tile .v small{font-size:13px;font-weight:600;color:var(--muted);margin-left:2px}
+.tile .s{font-size:11.5px;color:var(--muted2);margin-top:2px}
+
+/* ══ 차트 ══ */
+.chartbox{padding:12px 18px 16px;position:relative}
+.legend{display:flex;gap:14px;flex-wrap:wrap;padding:0 18px 6px}
+.lg{display:flex;align-items:center;gap:6px;font-size:12px;color:var(--ink2);font-weight:600}
+.lg i{width:9px;height:9px;border-radius:2.5px;display:block}
+svg{display:block;overflow:visible}
+.gridline{stroke:var(--grid);stroke-width:1}
+.axis{fill:var(--muted2);font-size:10.5px;font-variant-numeric:tabular-nums}
+.tip{position:fixed;z-index:60;background:var(--ink);color:var(--card);border-radius:8px;
+     padding:7px 10px;font-size:12px;line-height:1.5;pointer-events:none;opacity:0;
+     transition:opacity .1s;white-space:nowrap;box-shadow:0 4px 14px rgba(0,0,0,.18)}
+.tip.on{opacity:1}
+.tip b{font-weight:700}
+.tip .k{color:var(--muted2)}
+
+/* ══ 히트맵 ══ */
+.hmwrap{padding:14px 18px 18px;overflow-x:auto}
+.hm rect{shape-rendering:crispEdges}
+.hmleg{display:flex;align-items:center;gap:5px;font-size:11px;color:var(--muted);
+       padding:0 18px 14px;justify-content:flex-end}
+.hmleg i{width:11px;height:11px;border-radius:2px;display:block}
+
+/* ══ 표 ══ */
+.tablewrap{overflow-x:auto;border-radius:var(--r)}
+table{width:100%;border-collapse:collapse}
+thead th{background:var(--card);font-size:11.5px;font-weight:700;color:var(--muted);
+         letter-spacing:.3px;text-align:left;padding:11px 12px;
+         border-bottom:1px solid var(--line);white-space:nowrap}
+thead th.r{text-align:right}
+thead th.sortable{cursor:pointer;user-select:none}
+thead th.sortable:hover{color:var(--accent)}
+thead th .arw{opacity:1;color:var(--accent);margin-left:3px}
+tbody td{padding:11px 12px;border-bottom:1px solid var(--line2);font-size:13.5px;vertical-align:middle}
+tbody td.r{text-align:right}
+tbody tr.clk{cursor:pointer}
+tbody tr:hover{background:var(--hover)}
+tbody tr:last-child td{border-bottom:0}
+.idx{color:var(--muted2);font-size:12px;width:34px}
+.who{display:flex;align-items:center;gap:9px;min-width:0}
+.ava{width:26px;height:26px;border-radius:50%;background:var(--line2);flex:none;object-fit:cover}
+.ava.ph{display:grid;place-items:center;font-size:10px;font-weight:800;color:var(--muted)}
+.ava.big{width:60px;height:60px;font-size:21px}
+.nm{font-weight:600;white-space:nowrap}
+.gh{color:var(--muted)}
+.miss{color:var(--warn);font-weight:700}
+.miss::before{content:"●";font-size:8px;vertical-align:2px;margin-right:4px}
+.tags{display:flex;gap:4px;flex-wrap:wrap}
+.tag{border-radius:5px;padding:2px 7px;font-size:11.5px;font-weight:700;white-space:nowrap;
+     background:var(--line2);color:var(--ink2);display:inline-flex;align-items:center;gap:5px}
+.tag i{width:7px;height:7px;border-radius:2px;display:block}
+.cnt{font-weight:800}
+.plus{color:var(--pos)}
+.minus{color:var(--neg)}
+.badge{display:inline-flex;align-items:center;gap:5px;border-radius:999px;padding:3px 9px;
+       font-size:11.5px;font-weight:700;border:1px solid}
+.badge i{width:6px;height:6px;border-radius:50%;display:block;background:currentColor}
+.b-active{color:var(--st-active);background:var(--st-active-bg);border-color:var(--st-active-line)}
+.b-slowing{color:var(--st-slow);background:var(--st-slow-bg);border-color:var(--st-slow-line)}
+.b-dormant{color:var(--st-dorm);background:var(--st-dorm-bg);border-color:var(--st-dorm-line)}
+.empty{padding:52px 20px;text-align:center;color:var(--muted)}
+.empty b{display:block;font-size:15px;color:var(--ink2);margin-bottom:5px}
+.alert{background:var(--warn-soft);border:1px solid var(--warn-line);border-radius:10px;
+       padding:10px 14px;font-size:12.5px;color:var(--warn);font-weight:600}
+.alert b{font-weight:800}
+
+/* ══ 프로필 ══ */
+.profile{display:flex;gap:18px;padding:20px;align-items:center}
+.profile .meta{min-width:0;flex:1}
+.profile h2{font-size:20px;font-weight:800;letter-spacing:-.4px}
+.profile .kv{display:flex;gap:16px;flex-wrap:wrap;margin-top:7px;font-size:12.5px;color:var(--muted)}
+.profile .kv b{color:var(--ink2);font-weight:700}
+.back{display:inline-flex;align-items:center;gap:6px;font-size:12.5px;font-weight:600;
+      color:var(--muted);cursor:pointer}
+.back:hover{color:var(--accent)}
+.cols{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+@media (max-width:1000px){.cols{grid-template-columns:1fr}.tiles{grid-template-columns:repeat(2,1fr)}}
+
+/* ══ 인쇄 ══ */
+@media print{
+  body{background:#fff}
+  .side,.top,.filterbar,.no-print{display:none!important}
+  .wrap{padding:0;max-width:none}
+  .app{display:block}
+  .card{border:0}
+  thead th{border-bottom:1.5px solid #000}
+  .print-only{display:block!important}
+  tr{break-inside:avoid}
+}
+.print-only{display:none}
+</style>
+</head>
+<body>
+
+<div class="app">
+  <aside class="side">
+    <div class="brand">HSF <span>Dashboard</span><small>HANDONG SOFTWARE FOUNDATION</small></div>
+
+    <div class="navsec">현황</div>
+    <nav>
+      <a href="#/" data-r="/">
+        <svg viewBox="0 0 24 24"><path d="M3 12h4l3 8 4-16 3 8h4"/></svg>개요</a>
+      <a href="#/members" data-r="/members">
+        <svg viewBox="0 0 24 24"><circle cx="9" cy="8" r="3.2"/><path d="M3 20c0-3.3 2.7-5.5 6-5.5s6 2.2 6 5.5"/><path d="M16 8.5a3 3 0 100-1M18 20c0-2.6-1-4.3-2.5-5.2"/></svg>멤버</a>
+    </nav>
+
+    <div class="navsec">관리</div>
+    <nav>
+      <a href="#/report" data-r="/report">
+        <svg viewBox="0 0 24 24"><path d="M6 3h9l4 4v14H6z"/><path d="M15 3v4h4M9 12h7M9 16h5"/></svg>명단 뽑기</a>
+    </nav>
+
+    <div class="sidefoot" id="sidefoot"></div>
+  </aside>
+
+  <div class="mainarea">
+    <header class="top">
+      <h1 id="pg-title">개요</h1>
+      <span class="sub" id="pg-sub"></span>
+      <div class="right" id="pg-actions"></div>
+    </header>
+    <div class="wrap" id="view"></div>
+  </div>
+</div>
+
+<div class="tip" id="tip"></div>
+
+<script>
+/* ══════════════════════════════════════════════════════════════════════
+   서버 연결
+   - /api/bootstrap            공개 데이터 (학번·학과 없음)
+   - /api/admin/reports/...    명단 (학번·학과 포함, 관리자 전용)
+   ══════════════════════════════════════════════════════════════════════ */
+const API_BASE = '/api';
+
+/** 학기 정의. 명단 뽑을 때 쓰는 기간 프리셋이다. 새 학기가 시작되면 여기에 추가한다. */
+const TERMS = [
+  {code: '2025-2', name: '2025 2학기',   from: '2025-09-01', to: '2025-12-20'},
+  {code: '2026-1', name: '2026 1학기',   from: '2026-03-02', to: '2026-06-19'},
+  {code: '2026-S', name: '2026 여름학기', from: '2026-06-22', to: '2026-08-14'}
+];
+
+let DB = {commits: [], members: [], projects: [], memberBy: {}, projectBy: {}};
+let TODAY = new Date().toISOString().slice(0, 10);
+let PRESETS = [];
+
+async function loadBootstrap() {
+  const res = await fetch(`${API_BASE}/bootstrap`);
+  if (!res.ok) throw new Error(`서버 응답 ${res.status}`);
+  const d = await res.json();
+
+  DB.commits  = d.commits  || [];
+  DB.members  = d.members  || [];
+  DB.projects = d.projects || [];
+  DB.memberBy  = Object.fromEntries(DB.members.map(m => [m.login, m]));
+  DB.projectBy = Object.fromEntries(DB.projects.map(p => [p.slug, p]));
+  // 프로젝트 → 색 슬롯 고정.
+  // 서버가 활동량 순으로 정렬해서 주므로, 활동이 많은 프로젝트가 앞 색을 갖는다.
+  // 필터를 바꿔도 이 배정은 그대로다 — 색이 프로젝트를 따라다녀야 읽을 수 있다.
+  // 팔레트가 8색이라, 9번째부터는 색을 돌려쓰지 않고 회색으로 둔다.
+  // 돌려쓰면 같은 색이 두 프로젝트를 가리켜서 차트를 잘못 읽게 된다.
+  DB.projects.forEach((p, i) => p.color = i < 8 ? `var(--series-${i + 1})` : 'var(--muted2)');
+
+  TODAY = d.today || TODAY;
+  PRESETS = [
+    {label: '최근 30일', from: shift(TODAY, -29),  to: TODAY},
+    {label: '최근 90일', from: shift(TODAY, -89),  to: TODAY},
+    {label: '최근 1년',  from: shift(TODAY, -364), to: TODAY},
+    ...TERMS.map(t => ({label: t.name, from: t.from, to: t.to})),
+    {label: '전체 기간', from: '2020-01-01', to: TODAY}
+  ];
+}
+
+/** 명단은 공개 데이터가 아니라 관리자 API 에서 직접 받는다 (학번·학과 포함). */
+async function fetchReport(s) {
+  const q = new URLSearchParams({from: s.from, to: s.to, minCommits: s.min});
+  if (s.projects.length) q.set('projects', s.projects.join(','));
+  const res = await fetch(`${API_BASE}/admin/reports/active-members?${q}`);
+  if (!res.ok) throw new Error(`명단 조회 실패 (${res.status})`);
+  return res.json();
+}
+
+/* ── 유틸 ── */
+const $  = s => document.querySelector(s);
+const fmt = n => (n ?? 0).toLocaleString('ko-KR');
+const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const dOf = c => c.committedAt.slice(0, 10);
+const ymd = d => d.toISOString().slice(0, 10);
+const parse = s => new Date(s + 'T00:00:00Z');
+const shift = (s, n) => ymd(new Date(parse(s).getTime() + n * 864e5));
+const short = s => s ? s.slice(2).replaceAll('-', '.') : '—';
+const daysBetween = (a, b) => Math.round((parse(b) - parse(a)) / 864e5);
+
+/* ══════════════════════════════════════════════════════════════════════
+   집계 — 이 함수들이 그대로 v2 서버 SQL의 명세가 된다
+   ══════════════════════════════════════════════════════════════════════ */
+function slice({from, to, projects = [], login = null}) {
+  return DB.commits.filter(c => {
+    const d = dOf(c);
+    if (d < from || d > to) return false;              // ← 종료일 당일 포함
+    if (projects.length && !projects.includes(c.project)) return false;
+    if (login && c.login !== login) return false;
+    return true;
+  });
+}
+
+/** 기간별 사람 단위 집계 — /api/admin/reports/active-members 와 동일 */
+function activeMembers({from, to, projects = [], min = 1}) {
+  const by = new Map();
+  const cs = slice({from, to, projects});
+  for (const c of cs) {
+    let r = by.get(c.login);
+    if (!r) by.set(c.login, r = {login: c.login, commits: 0, additions: 0, deletions: 0,
+                                 projects: new Set(), days: new Set(),
+                                 first: dOf(c), last: dOf(c)});
+    r.commits++; r.additions += c.additions; r.deletions += c.deletions;
+    r.projects.add(c.project); r.days.add(dOf(c));
+    if (dOf(c) < r.first) r.first = dOf(c);
+    if (dOf(c) > r.last)  r.last  = dOf(c);
+  }
+  const rows = [...by.values()].filter(r => r.commits >= min).map(r => {
+    const m = DB.memberBy[r.login] || {};
+    return {
+      login: r.login, name: m.name || r.login,
+      avatarUrl: m.avatarUrl || null, registered: !!m.registered, role: m.role || null,
+      projectSlugs: [...r.projects],
+      projects: [...r.projects].map(s => DB.projectBy[s]?.name || s).sort(),
+      commits: r.commits, additions: r.additions, deletions: r.deletions,
+      activeDays: r.days.size, first: r.first, last: r.last
+    };
+  });
+  return {from, to, totalCommits: cs.length, rows};
+}
+
+/** 활동 상태 — config/score-policy.yml 의 status 규칙 그대로 */
+function statusOf(login) {
+  const n30 = slice({from: shift(TODAY, -29), to: TODAY, login}).length;
+  const p30 = slice({from: shift(TODAY, -59), to: shift(TODAY, -30), login}).length;
+  const n60 = n30 + p30;
+  if (n60 === 0) return 'dormant';
+  if (n30 === 0) return 'dormant';
+  if (p30 > 0 && (p30 - n30) / p30 >= 0.5) return 'slowing';
+  return 'active';
+}
+const STATUS_KO = {active: '활동 중', slowing: '둔화', dormant: '휴면'};
+
+/** 버킷 집계 (주별/월별) — 프로젝트별로 쌓는다 */
+function buckets({from, to, projects = [], login = null}) {
+  const span = daysBetween(from, to);
+  const unit = span <= 120 ? 'week' : 'month';
+  const key = d => unit === 'month' ? d.slice(0, 7)
+                                    : ymd(new Date(parse(d).getTime() - parse(d).getUTCDay() * 864e5));
+  const map = new Map();
+  for (const c of slice({from, to, projects, login})) {
+    const k = key(dOf(c));
+    if (!map.has(k)) map.set(k, {});
+    const b = map.get(k);
+    b[c.project] = (b[c.project] || 0) + 1;
+  }
+  // 빈 구간도 축에 남긴다
+  const out = [];
+  if (unit === 'month') {
+    let d = from.slice(0, 7);
+    while (d <= to.slice(0, 7)) {
+      out.push({key: d, label: d.slice(2).replace('-', '.'), vals: map.get(d) || {}});
+      const [y, m] = d.split('-').map(Number);
+      d = m === 12 ? `${y + 1}-01` : `${y}-${String(m + 1).padStart(2, '0')}`;
+    }
+  } else {
+    let d = key(from);
+    while (d <= to) {
+      out.push({key: d, label: d.slice(5).replace('-', '.'), vals: map.get(d) || {}});
+      d = shift(d, 7);
+    }
+  }
+  return {unit, rows: out};
+}
+
+/* ══ 툴팁 ══ */
+const tip = $('#tip');
+function showTip(e, html) {
+  tip.innerHTML = html; tip.classList.add('on');
+  const r = tip.getBoundingClientRect();
+  let x = e.clientX + 14, y = e.clientY - r.height - 10;
+  if (x + r.width > innerWidth - 8) x = e.clientX - r.width - 14;
+  if (y < 8) y = e.clientY + 16;
+  tip.style.left = x + 'px'; tip.style.top = y + 'px';
+}
+const hideTip = () => tip.classList.remove('on');
+document.addEventListener('scroll', hideTip, true);
+
+/* ══════════════════════════════════════════════════════════════════════
+   차트
+   ══════════════════════════════════════════════════════════════════════ */
+/** 위쪽 두 모서리만 둥근 사각형 (데이터 끝단 4px, 베이스라인 쪽은 각) */
+function topRounded(x, y, w, h, r) {
+  r = Math.max(0, Math.min(r, w / 2, h));
+  return `M${x},${y + h}L${x},${y + r}Q${x},${y} ${x + r},${y}L${x + w - r},${y}`
+       + `Q${x + w},${y} ${x + w},${y + r}L${x + w},${y + h}Z`;
+}
+
+/** 스택 막대 — 시간에 따른 커밋 수, 프로젝트별로 쌓음 */
+function stackedBars(el, data, slugs) {
+  const W = el.clientWidth || 760, H = 190, PL = 34, PR = 8, PT = 10, PB = 22;
+  const iw = W - PL - PR, ih = H - PT - PB;
+  const totals = data.rows.map(r => slugs.reduce((s, k) => s + (r.vals[k] || 0), 0));
+  const max = Math.max(1, ...totals);
+  const nice = max <= 5 ? 5 : Math.ceil(max / 5) * 5;
+  const n = data.rows.length || 1;
+  const step = iw / n, bw = Math.min(26, Math.max(4, step * 0.62));
+  const y = v => PT + ih - (v / nice) * ih;
+  const GAP = 2;                                   // 세그먼트 사이 서피스 간격
+
+  let g = '';
+  for (let i = 0; i <= 4; i++) {                   // 하드라인 그리드
+    const v = nice * i / 4;
+    g += `<line class="gridline" x1="${PL}" x2="${PL + iw}" y1="${y(v)}" y2="${y(v)}"/>`
+       + `<text class="axis" x="${PL - 7}" y="${y(v) + 3.5}" text-anchor="end">${v}</text>`;
+  }
+
+  data.rows.forEach((r, i) => {
+    const x = PL + step * i + (step - bw) / 2;
+    let acc = 0;
+    const parts = slugs.map(s => [s, r.vals[s] || 0]).filter(([, v]) => v > 0);
+    parts.forEach(([s, v], j) => {
+      const yTop = y(acc + v), h0 = y(acc) - y(acc + v);
+      const isTop = j === parts.length - 1;
+      const h = Math.max(1.5, h0 - (isTop ? 0 : GAP));
+      const p = DB.projectBy[s];
+      const d = isTop ? topRounded(x, yTop, bw, h, 4)
+                      : `M${x},${yTop}h${bw}v${h}h${-bw}Z`;
+      g += `<path d="${d}" fill="${p.color}"
+              data-t="${esc(r.label)}|${esc(p.name)}|${v}|${totals[i]}"></path>`;
+      acc += v;
+    });
+    // 히트 영역을 마크보다 넓게 (24px 최소)
+    g += `<rect x="${PL + step * i}" y="${PT}" width="${step}" height="${ih}" fill="transparent"
+            data-t="${esc(r.label)}||${totals[i]}|${totals[i]}"></rect>`;
+    const showLbl = n <= 14 || i % Math.ceil(n / 12) === 0;
+    if (showLbl)
+      g += `<text class="axis" x="${x + bw / 2}" y="${H - 6}" text-anchor="middle">${esc(r.label)}</text>`;
+  });
+
+  el.innerHTML = `<svg width="100%" height="${H}" viewBox="0 0 ${W} ${H}" role="img"
+      aria-label="기간별 커밋 수 추이">${g}</svg>`;
+  el.querySelectorAll('[data-t]').forEach(node => {
+    node.onmousemove = e => {
+      const [lab, proj, v, tot] = node.dataset.t.split('|');
+      showTip(e, proj
+        ? `<b>${esc(lab)}</b><br><span class="k">${esc(proj)}</span> ${v}건<br><span class="k">합계</span> ${tot}건`
+        : `<b>${esc(lab)}</b><br>커밋 ${tot}건`);
+    };
+    node.onmouseleave = hideTip;
+  });
+}
+
+/** 스파크라인 — 최근 12주 커밋 (단일 계열, 범례 불필요) */
+function sparkline(login) {
+  const W = 74, H = 22, n = 12, bw = 4, gap = (W - n * bw) / (n - 1);
+  const from = shift(TODAY, -7 * n + 1);
+  const b = buckets({from, to: TODAY, login});
+  const vals = b.rows.slice(-n).map(r => Object.values(r.vals).reduce((a, x) => a + x, 0));
+  while (vals.length < n) vals.unshift(0);
+  if (!vals.some(v => v > 0)) return '<span class="hint">—</span>';
+  const max = Math.max(1, ...vals);
+  const bars = vals.map((v, i) => {
+    const h = v === 0 ? 1.5 : Math.max(2.5, (v / max) * H);
+    const x = i * (bw + gap);
+    return `<path d="${topRounded(x, H - h, bw, h, 2)}"
+              fill="${v === 0 ? 'var(--line)' : 'var(--series-1)'}"/>`;
+  }).join('');
+  return `<svg width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" aria-hidden="true">${bars}</svg>`;
+}
+
+/** 히트맵 — 최근 1년 일별 커밋 (순차 스케일: 한 색상, 밝음→어둠) */
+function heatmap(login) {
+  const CELL = 11, GAP = 3, DAYS = 371;
+  const endD = parse(TODAY);
+  const start = ymd(new Date(endD.getTime() - (DAYS - 1 - (6 - endD.getUTCDay())) * 864e5));
+  const counts = new Map();
+  for (const c of slice({from: start, to: TODAY, login})) {
+    counts.set(dOf(c), (counts.get(dOf(c)) || 0) + 1);
+  }
+  const weeks = Math.ceil(DAYS / 7);
+  const W = weeks * (CELL + GAP) + 30, H = 7 * (CELL + GAP) + 18;
+  let g = '', monthLbl = '', lastM = '';
+  for (let w = 0; w < weeks; w++) {
+    for (let dw = 0; dw < 7; dw++) {
+      const d = shift(start, w * 7 + dw);
+      if (d > TODAY) continue;
+      const v = counts.get(d) || 0;
+      const lvl = v === 0 ? 0 : v === 1 ? 1 : v <= 2 ? 2 : v <= 4 ? 3 : 4;
+      g += `<rect x="${30 + w * (CELL + GAP)}" y="${12 + dw * (CELL + GAP)}"
+              width="${CELL}" height="${CELL}" rx="2.5" fill="var(--hm-${lvl})"
+              data-d="${d}" data-v="${v}"></rect>`;
+    }
+    const m = shift(start, w * 7).slice(0, 7);
+    if (m !== lastM && shift(start, w * 7).slice(8) <= '07') {
+      monthLbl += `<text class="axis" x="${30 + w * (CELL + GAP)}" y="7">${+m.slice(5)}월</text>`;
+      lastM = m;
+    }
+  }
+  ['월', '수', '금'].forEach((t, i) => {
+    monthLbl += `<text class="axis" x="24" y="${12 + (i * 2 + 1) * (CELL + GAP) + 9}"
+                   text-anchor="end">${t}</text>`;
+  });
+  return `<svg class="hm" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" role="img"
+    aria-label="최근 1년 일별 커밋 히트맵">${monthLbl}${g}</svg>`;
+}
+function bindHeatmap(root) {
+  root.querySelectorAll('.hm rect').forEach(r => {
+    r.onmousemove = e => showTip(e,
+      `<b>${r.dataset.d}</b><br>커밋 ${r.dataset.v}건`);
+    r.onmouseleave = hideTip;
+  });
+}
+
+/* ══════════════════════════════════════════════════════════════════════
+   화면
+   ══════════════════════════════════════════════════════════════════════ */
+const state = {
+  ov: {preset: 2, from: '', to: '', projects: []},
+  mem: {q: '', status: '', sort: 'recent'},
+  rep: {from: '', to: '', projects: [], min: 1, sort: 'commits', dir: -1, data: null}
+};
+
+
+/* ── 개요 ── */
+function viewOverview() {
+  const s = state.ov;
+  if (!s.from) { s.from = PRESETS[s.preset].from; s.to = PRESETS[s.preset].to; }
+  const rep = activeMembers({from: s.from, to: s.to, projects: s.projects});
+  const b   = buckets({from: s.from, to: s.to, projects: s.projects});
+  const slugs = (s.projects.length ? s.projects : DB.projects.map(p => p.slug));
+  const last = DB.commits.length ? dOf(DB.commits[DB.commits.length - 1]) : null;
+  const perProject = DB.projects.map(p => {
+    const cs = slice({from: s.from, to: s.to, projects: [p.slug]});
+    return {...p, commits: cs.length, people: new Set(cs.map(c => c.login)).size,
+            last: cs.length ? dOf(cs[cs.length - 1]) : null};
+  });
+  const recent = slice({from: s.from, to: s.to, projects: s.projects}).slice(-8).reverse();
+
+  $('#view').innerHTML = `
+    <section class="card filterbar no-print">
+      <div class="row"><label class="k">기간</label>
+        <div class="row" id="ov-presets">${PRESETS.map((p, i) =>
+          `<button class="chip${p.from === s.from && p.to === s.to ? ' on' : ''}" data-i="${i}">${p.label}</button>`).join('')}</div>
+      </div>
+      <div class="row"><label class="k">프로젝트</label>
+        <div class="row" id="ov-projects">
+          <button class="chip${s.projects.length ? '' : ' on'}" data-slug="">전체</button>
+          ${DB.projects.map(p => `<button class="chip${s.projects.includes(p.slug) ? ' on' : ''}"
+             data-slug="${p.slug}">${esc(p.name)}</button>`).join('')}
+        </div>
+      </div>
+    </section>
+
+    <section class="card tiles">
+      <div class="tile"><div class="l">활동한 멤버</div><div class="v">${rep.rows.length}<small>명</small></div>
+        <div class="s">전체 ${DB.members.length}명 중</div></div>
+      <div class="tile"><div class="l">커밋</div><div class="v">${fmt(rep.totalCommits)}<small>건</small></div>
+        <div class="s">${s.from} ~ ${s.to}</div></div>
+      <div class="tile"><div class="l">활동한 프로젝트</div>
+        <div class="v">${perProject.filter(p => p.commits).length}<small>/${DB.projects.length}</small></div>
+        <div class="s">저장소 ${DB.projects.reduce((a, p) => a + p.repos.length, 0)}개</div></div>
+      <div class="tile"><div class="l">마지막 활동</div>
+        <div class="v" style="font-size:19px">${last ? short(last) : '—'}</div>
+        <div class="s">${last ? daysBetween(last, TODAY) + '일 전' : ''}</div></div>
+    </section>
+
+    <section class="card">
+      <div class="card-hd"><h2>커밋 추이</h2>
+        <span class="hint">${b.unit === 'week' ? '주별' : '월별'} · 프로젝트별 누적</span>
+        <button class="btn sm no-print" id="tbl-toggle">표로 보기</button></div>
+      <div class="legend">${DB.projects.filter(p => slugs.includes(p.slug)).map(p =>
+        `<span class="lg"><i style="background:${p.color}"></i>${esc(p.name)}</span>`).join('')}</div>
+      <div class="chartbox" id="chart"></div>
+      <div class="tablewrap" id="chart-table" hidden>
+        <table><thead><tr><th>구간</th>
+          ${DB.projects.filter(p => slugs.includes(p.slug)).map(p => `<th class="r">${esc(p.name)}</th>`).join('')}
+          <th class="r">합계</th></tr></thead>
+          <tbody>${b.rows.map(r => `<tr><td class="num">${r.label}</td>
+            ${slugs.map(k => `<td class="r num">${r.vals[k] || 0}</td>`).join('')}
+            <td class="r num cnt">${slugs.reduce((a, k) => a + (r.vals[k] || 0), 0)}</td></tr>`).join('')}
+          </tbody></table>
+      </div>
+    </section>
+
+    <div class="cols">
+      <section class="card">
+        <div class="card-hd"><h2>프로젝트</h2></div>
+        <div class="tablewrap"><table><thead><tr>
+          <th>프로젝트</th><th class="r">커밋</th><th class="r">참여</th><th class="r">최근 활동</th>
+        </tr></thead><tbody>
+          ${perProject.map(p => `<tr>
+            <td><span class="tag"><i style="background:${p.color}"></i>${esc(p.name)}</span>
+                <div class="hint" style="margin-top:3px">${p.repos.map(esc).join(', ')}</div></td>
+            <td class="r num cnt">${fmt(p.commits)}</td>
+            <td class="r num">${p.people}</td>
+            <td class="r num" style="color:var(--muted)">${short(p.last)}</td></tr>`).join('')}
+        </tbody></table></div>
+      </section>
+
+      <section class="card">
+        <div class="card-hd"><h2>최근 커밋</h2></div>
+        <div class="tablewrap"><table><tbody>
+          ${recent.length ? recent.map(c => {
+            const m = DB.memberBy[c.login] || {};
+            return `<tr class="clk" data-go="#/members/${encodeURIComponent(c.login)}">
+              <td style="width:1%"><div class="ava ph">${esc((m.name || c.login).slice(0, 1))}</div></td>
+              <td><div class="nm">${esc(m.name || c.login)}</div>
+                  <div class="hint" style="max-width:340px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(c.message)}</div></td>
+              <td class="r"><span class="tag"><i style="background:${DB.projectBy[c.project].color}"></i>${esc(DB.projectBy[c.project].name)}</span>
+                  <div class="hint num" style="margin-top:3px">${short(dOf(c))}</div></td></tr>`;
+          }).join('') : `<tr><td class="empty"><b>이 기간에 커밋이 없습니다</b></td></tr>`}
+        </tbody></table></div>
+      </section>
+    </div>`;
+
+  stackedBars($('#chart'), b, slugs);
+  addEventListener('resize', () => { if (location.hash === '#/' || !location.hash) stackedBars($('#chart'), b, slugs); }, {once: true});
+
+  $('#tbl-toggle').onclick = e => {
+    const t = $('#chart-table'); t.hidden = !t.hidden;
+    e.target.textContent = t.hidden ? '표로 보기' : '차트로 보기';
+  };
+  $('#ov-presets').onclick = e => {
+    const b2 = e.target.closest('.chip'); if (!b2) return;
+    const p = PRESETS[+b2.dataset.i]; s.from = p.from; s.to = p.to; render();
+  };
+  $('#ov-projects').onclick = e => {
+    const b2 = e.target.closest('.chip'); if (!b2) return;
+    const slug = b2.dataset.slug;
+    if (!slug) s.projects = [];
+    else { const i = s.projects.indexOf(slug); i < 0 ? s.projects.push(slug) : s.projects.splice(i, 1); }
+    render();
+  };
+}
+
+/* ── 멤버 목록 ── */
+function viewMembers() {
+  const s = state.mem;
+  const all = DB.members.map(m => {
+    const mine  = slice({from: '2000-01-01', to: TODAY, login: m.login});
+    const d90   = slice({from: shift(TODAY, -89), to: TODAY, login: m.login});
+    const days  = new Set(mine.map(dOf));
+    return {
+      ...m,
+      status: statusOf(m.login),
+      total: mine.length, recent: d90.length, activeDays: days.size,
+      first: mine.length ? dOf(mine[0]) : null,
+      last:  mine.length ? dOf(mine[mine.length - 1]) : null,
+      projects: [...new Set(mine.map(c => c.project))],
+      additions: mine.reduce((a, c) => a + c.additions, 0),
+      deletions: mine.reduce((a, c) => a + c.deletions, 0)
+    };
+  });
+
+  let rows = all.filter(m =>
+    (!s.q || (m.name + m.login).toLowerCase().includes(s.q.toLowerCase())) &&
+    (!s.status || m.status === s.status));
+
+  const SORTS = {recent: '최근 90일 커밋', total: '총 커밋', activeDays: '활동일', name: '이름'};
+  rows.sort((a, b) => s.sort === 'name'
+    ? a.name.localeCompare(b.name, 'ko')
+    : (b[s.sort] - a[s.sort]) || b.total - a.total);
+
+  const cnt = k => all.filter(m => m.status === k).length;
+
+  $('#view').innerHTML = `
+    <section class="card filterbar no-print">
+      <div class="row"><label class="k">상태</label>
+        <div class="row" id="mem-status">
+          <button class="chip${s.status ? '' : ' on'}" data-s="">전체 ${all.length}</button>
+          ${['active', 'slowing', 'dormant'].map(k =>
+            `<button class="chip${s.status === k ? ' on' : ''}" data-s="${k}">${STATUS_KO[k]} ${cnt(k)}</button>`).join('')}
+        </div>
+      </div>
+      <div class="row"><label class="k">정렬</label>
+        <div class="row" id="mem-sort">${Object.entries(SORTS).map(([k, v]) =>
+          `<button class="chip${s.sort === k ? ' on' : ''}" data-k="${k}">${v}</button>`).join('')}</div>
+        <input type="search" id="mem-q" placeholder="이름 · GitHub 검색" value="${esc(s.q)}"
+               style="margin-left:auto;width:200px">
+      </div>
+    </section>
+
+    <section class="card">
+      <div class="tablewrap"><table><thead><tr>
+        <th class="idx"></th><th>멤버</th><th>상태</th>
+        <th class="r">최근 90일</th><th class="r">총 커밋</th><th class="r">활동일</th>
+        <th>최근 12주</th><th>프로젝트</th><th class="r">마지막 활동</th>
+      </tr></thead><tbody>
+        ${rows.length ? rows.map((m, i) => `
+          <tr class="clk" data-go="#/members/${encodeURIComponent(m.login)}">
+            <td class="idx num">${i + 1}</td>
+            <td><div class="who">
+              <div class="ava ph">${esc(m.name.slice(0, 1))}</div>
+              ${m.avatarUrl ? `<img class="ava" src="${esc(m.avatarUrl)}" alt=""
+                   style="margin-left:-26px;background:var(--card)" onerror="this.remove()">` : ''}
+              <div><div class="nm">${esc(m.name)}</div>
+                   <div class="hint mono">${esc(m.login)}</div></div></div></td>
+            <td><span class="badge b-${m.status}"><i></i>${STATUS_KO[m.status]}</span></td>
+            <td class="r num cnt">${fmt(m.recent)}</td>
+            <td class="r num">${fmt(m.total)}</td>
+            <td class="r num">${fmt(m.activeDays)}</td>
+            <td>${sparkline(m.login)}</td>
+            <td><div class="tags">${m.projects.map(p =>
+              `<span class="tag"><i style="background:${DB.projectBy[p].color}"></i>${esc(DB.projectBy[p].name)}</span>`).join('') || '<span class="hint">—</span>'}</div></td>
+            <td class="r num" style="color:var(--muted)">${short(m.last)}</td>
+          </tr>`).join('')
+        : `<tr><td colspan="9" class="empty"><b>조건에 맞는 멤버가 없습니다</b>검색어나 상태 필터를 바꿔 보세요</td></tr>`}
+      </tbody></table></div>
+    </section>
+    <p class="hint">활동 상태 기준 — 최근 30일 커밋이 있으면 <b>활동 중</b>,
+       직전 30일 대비 50% 이상 줄면 <b>둔화</b>, 30일 이상 커밋이 없으면 <b>휴면</b>.
+       (config/score-policy.yml)</p>`;
+
+  $('#mem-status').onclick = e => {
+    const b = e.target.closest('.chip'); if (!b) return; s.status = b.dataset.s; render();
+  };
+  $('#mem-sort').onclick = e => {
+    const b = e.target.closest('.chip'); if (!b) return; s.sort = b.dataset.k; render();
+  };
+  const q = $('#mem-q');
+  q.oninput = () => { s.q = q.value; render(); requestAnimationFrame(() => {
+    const el = $('#mem-q'); el.focus(); el.setSelectionRange(el.value.length, el.value.length); }); };
+}
+
+/* ── 멤버 상세 ── */
+function viewMember(login) {
+  const m = DB.memberBy[login];
+  const mine = slice({from: '2000-01-01', to: TODAY, login});
+  if (!m && !mine.length) {
+    $('#view').innerHTML = `<section class="card"><div class="empty">
+      <b>${esc(login)} 님을 찾을 수 없습니다</b>
+      <span class="back" data-go="#/members">← 멤버 목록으로</span></div></section>`;
+    return;
+  }
+  const name = m?.name || login;
+  const days = new Set(mine.map(dOf));
+  const add = mine.reduce((a, c) => a + c.additions, 0);
+  const del = mine.reduce((a, c) => a + c.deletions, 0);
+  const status = statusOf(login);
+  const from1y = shift(TODAY, -364);
+  const b = buckets({from: from1y, to: TODAY, login});
+
+  // 최장 연속 활동일
+  const sorted = [...days].sort();
+  let best = 0, run = 0, prev = null;
+  for (const d of sorted) { run = (prev && daysBetween(prev, d) === 1) ? run + 1 : 1; best = Math.max(best, run); prev = d; }
+
+  const byProject = DB.projects.map(p => {
+    const cs = mine.filter(c => c.project === p.slug);
+    return {...p, commits: cs.length,
+            additions: cs.reduce((a, c) => a + c.additions, 0),
+            deletions: cs.reduce((a, c) => a + c.deletions, 0),
+            last: cs.length ? dOf(cs[cs.length - 1]) : null};
+  }).filter(p => p.commits).sort((a, b2) => b2.commits - a.commits);
+
+  $('#view').innerHTML = `
+    <span class="back no-print" data-go="#/members">← 멤버 목록</span>
+
+    <section class="card">
+      <div class="profile">
+        <div class="ava ph big">${esc(name.slice(0, 1))}</div>
+        ${m?.avatarUrl ? `<img class="ava big" src="${esc(m.avatarUrl)}" alt=""
+             style="margin-left:-78px;background:var(--card)" onerror="this.remove()">` : ''}
+        <div class="meta">
+          <h2>${esc(name)} <span class="badge b-${status}" style="vertical-align:5px"><i></i>${STATUS_KO[status]}</span></h2>
+          <div class="kv">
+            <span>역할 <b>${esc(m?.role || '—')}</b></span>
+            <span>GitHub <b class="mono">${esc(login)}</b></span>
+            ${m?.joinedOn ? `<span>합류 <b class="num">${m.joinedOn}</b></span>` : ''}
+          </div>
+        </div>
+        <a class="btn no-print" href="https://github.com/${encodeURIComponent(login)}" target="_blank" rel="noopener">GitHub 열기 ↗</a>
+      </div>
+    </section>
+
+    <section class="card tiles">
+      <div class="tile"><div class="l">총 커밋</div><div class="v">${fmt(mine.length)}<small>건</small></div>
+        <div class="s">${byProject.length}개 프로젝트</div></div>
+      <div class="tile"><div class="l">활동일</div><div class="v">${fmt(days.size)}<small>일</small></div>
+        <div class="s">최장 연속 ${best}일</div></div>
+      <div class="tile"><div class="l">코드 변경</div>
+        <div class="v" style="font-size:19px"><span class="plus">+${fmt(add)}</span>
+          <span style="color:var(--muted2);font-weight:600">/</span>
+          <span class="minus">−${fmt(del)}</span></div>
+        <div class="s">누적</div></div>
+      <div class="tile"><div class="l">활동 기간</div>
+        <div class="v" style="font-size:19px">${short(mine.length ? dOf(mine[0]) : null)} ~ ${short(mine.length ? dOf(mine[mine.length - 1]) : null)}</div>
+        <div class="s">${mine.length ? daysBetween(dOf(mine[0]), dOf(mine[mine.length - 1])) + '일' : ''}</div></div>
+    </section>
+
+    <section class="card">
+      <div class="card-hd"><h2>최근 1년 활동</h2><span class="hint">칸 하나 = 하루</span></div>
+      <div class="hmwrap" id="hm">${heatmap(login)}</div>
+      <div class="hmleg">적음
+        ${[0, 1, 2, 3, 4].map(l => `<i style="background:var(--hm-${l})"></i>`).join('')}많음</div>
+    </section>
+
+    <div class="cols">
+      <section class="card">
+        <div class="card-hd"><h2>월별 커밋</h2><span class="hint">최근 12개월</span></div>
+        <div class="chartbox" id="mchart"></div>
+      </section>
+
+      <section class="card">
+        <div class="card-hd"><h2>프로젝트별 기여</h2></div>
+        <div class="tablewrap"><table><thead><tr>
+          <th>프로젝트</th><th class="r">커밋</th><th class="r">추가 / 삭제</th><th class="r">최근</th>
+        </tr></thead><tbody>
+          ${byProject.map(p => `<tr>
+            <td><span class="tag"><i style="background:${p.color}"></i>${esc(p.name)}</span></td>
+            <td class="r num cnt">${fmt(p.commits)}</td>
+            <td class="r num"><span class="plus">+${fmt(p.additions)}</span>
+              <span style="color:var(--muted2)">/</span><span class="minus">−${fmt(p.deletions)}</span></td>
+            <td class="r num" style="color:var(--muted)">${short(p.last)}</td></tr>`).join('')
+            || `<tr><td colspan="4" class="empty"><b>기여 기록이 없습니다</b></td></tr>`}
+        </tbody></table></div>
+      </section>
+    </div>
+
+    <section class="card">
+      <div class="card-hd"><h2>최근 커밋</h2><span class="hint">최대 20건</span></div>
+      <div class="tablewrap"><table><thead><tr>
+        <th class="idx"></th><th>메시지</th><th>저장소</th><th class="r">변경</th><th class="r">날짜</th>
+      </tr></thead><tbody>
+        ${mine.slice(-20).reverse().map((c, i) => `<tr>
+          <td class="idx num">${i + 1}</td>
+          <td><div style="max-width:420px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(c.message)}</div>
+              <div class="hint mono">${esc(c.sha.slice(0, 7))}</div></td>
+          <td class="hint">${esc(c.repo)}</td>
+          <td class="r num"><span class="plus">+${fmt(c.additions)}</span>
+            <span style="color:var(--muted2)">/</span><span class="minus">−${fmt(c.deletions)}</span></td>
+          <td class="r num" style="color:var(--muted)">${short(dOf(c))}</td></tr>`).join('')
+          || `<tr><td colspan="5" class="empty"><b>커밋이 없습니다</b></td></tr>`}
+      </tbody></table></div>
+    </section>`;
+
+  bindHeatmap($('#hm'));
+  stackedBars($('#mchart'), b, DB.projects.map(p => p.slug));
+}
+
+/* ── 명단 뽑기 ── */
+async function viewReport() {
+  const s = state.rep;
+  if (!s.from) { const p = PRESETS[4]; s.from = p.from; s.to = p.to; }
+  const data = s.data = await fetchReport(s);
+  const reg = data.rows.filter(r => r.registered);
+  const unreg = data.rows.filter(r => !r.registered);
+
+  reg.sort((a, b) => {
+    const va = a[s.sort] ?? '', vb = b[s.sort] ?? '';
+    return (va < vb ? -1 : va > vb ? 1 : 0) * s.dir || a.login.localeCompare(b.login);
+  });
+  const scope = s.projects.length ? s.projects.map(x => DB.projectBy[x].name).join(', ') : '전체 프로젝트';
+  const arw = k => s.sort === k ? `<span class="arw">${s.dir < 0 ? '▼' : '▲'}</span>` : '';
+
+  $('#view').innerHTML = `
+    <div class="print-only" style="font-size:16px;font-weight:800;margin-bottom:3px">HSF 오픈소스 활동 참여자 명단</div>
+    <div class="print-only hint" style="margin-bottom:12px">${s.from} ~ ${s.to} · ${esc(scope)} · ${reg.length}명 · 커밋 ${fmt(data.totalCommits)}건</div>
+
+    <section class="card filterbar no-print">
+      <div class="row"><label class="k">기간 선택</label>
+        <div class="row" id="rep-presets">${PRESETS.map((p, i) =>
+          `<button class="chip${p.from === s.from && p.to === s.to ? ' on' : ''}" data-i="${i}">${p.label}</button>`).join('')}</div>
+      </div>
+      <div class="row"><label class="k">직접 입력</label>
+        <input type="date" id="rep-from" value="${s.from}">
+        <span style="color:var(--muted2)">~</span>
+        <input type="date" id="rep-to" value="${s.to}">
+        <span class="hint">종료일 당일까지 포함됩니다</span>
+      </div>
+      <div class="row"><label class="k">프로젝트</label>
+        <div class="row" id="rep-projects">
+          <button class="chip${s.projects.length ? '' : ' on'}" data-slug="">전체</button>
+          ${DB.projects.map(p => `<button class="chip${s.projects.includes(p.slug) ? ' on' : ''}"
+            data-slug="${p.slug}">${esc(p.name)}</button>`).join('')}
+        </div>
+      </div>
+      <div class="row"><label class="k">최소 커밋</label>
+        <input type="number" id="rep-min" value="${s.min}" min="1" style="width:78px">
+        <span class="hint">이 기간에 커밋 N건 이상인 사람만 표시</span>
+      </div>
+    </section>
+
+    <section class="card tiles">
+      <div class="tile"><div class="l">조회 기간</div><div class="v" style="font-size:16px">${s.from} ~ ${s.to}</div></div>
+      <div class="tile"><div class="l">명단 인원</div><div class="v">${reg.length}<small>명</small></div></div>
+      <div class="tile"><div class="l">기간 내 커밋</div><div class="v">${fmt(data.totalCommits)}<small>건</small></div></div>
+      <div class="tile"><div class="l">대상 프로젝트</div><div class="v" style="font-size:15px;padding-top:5px">${esc(scope)}</div></div>
+    </section>
+
+    <section class="card">
+      <div class="tablewrap"><table><thead><tr>
+        <th class="idx"></th>
+        <th class="sortable" data-k="name">이름${arw('name')}</th>
+        <th class="sortable" data-k="login">GitHub${arw('login')}</th>
+        <th>프로젝트</th>
+        <th class="r sortable" data-k="commits">커밋${arw('commits')}</th>
+        <th class="r sortable" data-k="activeDays">활동일${arw('activeDays')}</th>
+        <th class="r sortable" data-k="first">첫 커밋${arw('first')}</th>
+        <th class="r sortable" data-k="last">마지막 커밋${arw('last')}</th>
+        <th class="r">추가 / 삭제</th>
+      </tr></thead><tbody>
+        ${reg.length ? reg.map((r, i) => `<tr class="clk" data-go="#/members/${encodeURIComponent(r.login)}">
+          <td class="idx num">${i + 1}</td>
+          <td><div class="who"><div class="ava ph">${esc(r.name.slice(0, 1))}</div>
+            <span class="nm">${esc(r.name)}</span></div></td>
+          <td class="gh mono">${esc(r.login)}</td>
+          <td><div class="tags">${r.projectSlugs.map(p =>
+            `<span class="tag"><i style="background:${DB.projectBy[p].color}"></i>${esc(DB.projectBy[p].name)}</span>`).join('')}</div></td>
+          <td class="r num cnt">${fmt(r.commits)}</td>
+          <td class="r num">${fmt(r.activeDays)}</td>
+          <td class="r num" style="color:var(--muted)">${short(r.first)}</td>
+          <td class="r num" style="color:var(--muted)">${short(r.last)}</td>
+          <td class="r num"><span class="plus">+${fmt(r.additions)}</span>
+            <span style="color:var(--muted2)">/</span><span class="minus">−${fmt(r.deletions)}</span></td>
+        </tr>`).join('')
+        : `<tr><td colspan="9" class="empty"><b>이 기간에 커밋한 회원이 없습니다</b>기간이나 프로젝트 필터를 조정해 보세요</td></tr>`}
+      </tbody></table></div>
+    </section>
+
+    ${unreg.length ? `<section class="card">
+      <div class="card-hd"><h2>회원 명부에 없는 기여자</h2>
+        <span class="hint">외부 기여자이거나 등록되지 않은 계정입니다</span></div>
+      <div class="tablewrap"><table><thead><tr>
+        <th class="idx"></th><th>GitHub</th><th>프로젝트</th><th class="r">커밋</th>
+        <th class="r">첫 커밋</th><th class="r">마지막 커밋</th></tr></thead><tbody>
+        ${unreg.map((r, i) => `<tr><td class="idx num">${i + 1}</td><td class="mono">${esc(r.login)}</td>
+          <td><div class="tags">${r.projects.map(p => `<span class="tag">${esc(p)}</span>`).join('')}</div></td>
+          <td class="r num">${fmt(r.commits)}</td><td class="r num">${short(r.first)}</td>
+          <td class="r num">${short(r.last)}</td></tr>`).join('')}
+      </tbody></table></div></section>` : ''}`;
+
+  $('#rep-presets').onclick = e => {
+    const b = e.target.closest('.chip'); if (!b) return;
+    const p = PRESETS[+b.dataset.i]; s.from = p.from; s.to = p.to; render();
+  };
+  $('#rep-projects').onclick = e => {
+    const b = e.target.closest('.chip'); if (!b) return;
+    const slug = b.dataset.slug;
+    if (!slug) s.projects = [];
+    else { const i = s.projects.indexOf(slug); i < 0 ? s.projects.push(slug) : s.projects.splice(i, 1); }
+    render();
+  };
+  $('#rep-from').onchange = e => { s.from = e.target.value; render(); };
+  $('#rep-to').onchange   = e => { s.to   = e.target.value; render(); };
+  $('#rep-min').onchange  = e => { s.min  = Math.max(1, +e.target.value || 1); render(); };
+  document.querySelectorAll('th.sortable').forEach(th => th.onclick = () => {
+    const k = th.dataset.k;
+    if (s.sort === k) s.dir *= -1;
+    else { s.sort = k; s.dir = (k === 'name' || k === 'login') ? 1 : -1; }
+    render();
+  });
+}
+
+/* ── CSV ── */
+function downloadCsv() {
+  const s = state.rep;
+  const q = new URLSearchParams({from: s.from, to: s.to, minCommits: s.min});
+  if (s.projects.length) q.set('projects', s.projects.join(','));
+  location.href = `${API_BASE}/admin/reports/active-members.csv?${q}`;
+}
+
+/* ══ 라우터 ══ */
+const ROUTES = [
+  {re: /^\/?$/,                   title: '개요',      sub: 'HSF 오픈소스 활동 현황',        view: viewOverview},
+  {re: /^\/members$/,             title: '멤버',      sub: '참여자별 활동량',               view: viewMembers},
+  {re: /^\/members\/(.+)$/,       title: '멤버',      sub: '',                              view: viewMember},
+  {re: /^\/report$/,              title: '명단 뽑기', sub: '기간별 활동 참여자 (관리자)',   view: viewReport}
+];
+
+async function render() {
+  const path = (location.hash || '#/').slice(1);
+  let hit = null, arg = null;
+  for (const r of ROUTES) { const m = path.match(r.re); if (m) { hit = r; arg = m[1]; break; } }
+  if (!hit) { location.hash = '#/'; return; }
+
+  document.querySelectorAll('nav a').forEach(a =>
+    a.classList.toggle('on', a.dataset.r === path || (a.dataset.r === '/members' && path.startsWith('/members'))));
+
+  $('#pg-title').textContent = hit.title;
+  $('#pg-sub').textContent = hit === ROUTES[2] ? (DB.memberBy[arg]?.name || arg) : hit.sub;
+  $('#pg-actions').innerHTML = hit === ROUTES[3]
+    ? `<button class="btn" id="a-csv">CSV 내려받기</button><button class="btn" id="a-print">인쇄</button>` : '';
+
+  hideTip();
+  try {
+    await hit.view(arg);
+  } catch (e) {
+    $('#view').innerHTML = `<section class="card"><div class="empty">
+      <b>데이터를 불러오지 못했습니다</b>${esc(e.message)}</div></section>`;
+    return;
+  }
+
+  if (hit === ROUTES[3]) { $('#a-csv').onclick = downloadCsv; $('#a-print').onclick = () => print(); }
+  scrollTo(0, 0);
+}
+
+document.addEventListener('click', e => {
+  const t = e.target.closest('[data-go]');
+  if (t) { e.preventDefault(); location.hash = t.dataset.go; }
+});
+addEventListener('hashchange', render);
+
+(async function boot() {
+  try {
+    await loadBootstrap();
+  } catch (e) {
+    $('#view').innerHTML = `<section class="card"><div class="empty">
+      <b>서버에 연결하지 못했습니다</b>${esc(e.message)}</div></section>`;
+    return;
+  }
+  $('#sidefoot').innerHTML =
+    `커밋 ${fmt(DB.commits.length)}건 · 멤버 ${DB.members.length}명<br>프로젝트 ${DB.projects.length}개<br>기준일 ${TODAY}`;
+  render();
+})();
+</script>
+</body>
+</html>
