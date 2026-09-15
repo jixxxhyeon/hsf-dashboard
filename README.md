@@ -1,137 +1,190 @@
-# HSF Dashboard — 데이터 파이프라인
+# HSF Dashboard
 
-HSF 참여자 현황 대시보드. **서버도 DB도 없다.**
-GitHub Actions가 1시간마다 GitHub을 긁어서 `data/*.json`을 커밋하고, 프론트는 그 JSON만 읽는다.
+HandongSF 조직의 오픈소스 활동을 모아 보여주는 대시보드.
 
-```
-GitHub GraphQL ──▶ scripts/sync.mjs ──▶ data/*.json ──▶ 정적 사이트
-        (Actions cron, 1시간)              (git 커밋)
-```
+가장 중요한 기능은 **기간별 활동 참여자 명단**이다. 소중대 사업단에서 마일리지를
+취합할 때 "이 기간에 활동한 사람"을 뽑아야 하는데, 그 작업을 버튼 몇 번으로 끝내려고 만들었다.
 
-## 구조
+## 왜 이렇게 만들었나
 
-```
-config/                 ← 사람이 관리하는 유일한 데이터. 수정은 PR로.
-  projects.yml            프로젝트 ↔ 저장소 묶음
-  members.yml             학번/학과/한글이름/역할  (GitHub에 없는 정보)
-  terms.yml               학기 정의
-  score-policy.yml        점수 가중치 · 어뷰징 상한
-scripts/
-  github.mjs              GraphQL 수집 (rate limit 재시도, 커서 페이지네이션)
-  aggregate.mjs           집계 · 점수 · 랭킹 · 히트맵 · 상태판정  ← 순수 함수
-  emit.mjs                화면별 JSON 생성
-  sync.mjs                진입점
-  bootstrap-members.mjs   members.yml 자동 생성/갱신
-  test.mjs                모의 데이터 검증 (네트워크 불필요)
-web/
-  contributor.html        Contributor 상세 화면
-data/                   ← 생성물. 직접 고치지 말 것.
-.github/workflows/sync.yml
+이전 버전은 GitHub Actions 가 6시간마다 통계를 계산해 JSON 파일로 저장소에 커밋하고,
+화면이 그 파일을 읽는 구조였다. 서버가 필요 없다는 장점이 있었지만 한계가 분명했다.
+
+**미리 계산해둔 기간만 볼 수 있었다.** 사업단이 "3월 2일부터 6월 19일까지"를 요구하면
+그 기간은 파일에 없으니 스크립트를 고쳐서 다시 돌려야 했다.
+
+그래서 구조를 뒤집었다. **계산 결과 대신 커밋 원본을 DB에 쌓고, 볼 때 집계한다.**
+그러면 임의 기간 조회가 SQL 한 줄이 된다.
+
+```sql
+WHERE committed_at >= ? AND committed_at < ?
 ```
 
-## 실행
+이 한 줄을 위해 서버를 도입한 것이고, 나머지는 전부 여기서 파생된다.
 
-```bash
-npm ci
-npm test                                        # 네트워크 없이 집계 로직 검증 (15개)
+## 구성
 
-# 1) 회원 명부 자동 생성 — GitHub에서 긁어올 수 있는 건 다 채운다
-GITHUB_TOKEN=github_pat_xxx node scripts/bootstrap-members.mjs          # 미리보기
-GITHUB_TOKEN=github_pat_xxx node scripts/bootstrap-members.mjs --write  # 적용
-
-# 2) 동기화
-GITHUB_TOKEN=github_pat_xxx npm run sync
-GITHUB_TOKEN=github_pat_xxx node scripts/sync.mjs --days 90 --dry
+```
+GitHub GraphQL API
+        │  6시간마다 (또는 수동)
+        ▼
+  Spring Boot ──► PostgreSQL       커밋 원본을 그대로 적재
+        │
+        ▼
+     화면 (정적 HTML + fetch)
 ```
 
-## 회원 명부 자동 생성
-
-`bootstrap-members.mjs`가 채우는 것과 못 채우는 것:
-
-| | 항목 | 출처 |
-|---|---|---|
-| **자동** | login, 이름, 아바타, 위치, 소속, bio, 가입일 | GitHub 프로필 |
-| **자동** | **학번** | 커밋 author 이메일이 `22400437@handong.ac.kr` 형태일 때 정규식 추출 |
-| **자동** | 커밋 이메일 목록 (`aliases.emails`) | 계정이 바뀌어도 매칭되도록 보존 |
-| **추정** | role | 남의 PR 머지 3회↑ → maintainer, 커밋 10↑ → committer |
-| **추정** | primaryProject | 커밋이 가장 많은 프로젝트 |
-| **수기** | 학과, 확정 한글 이름, 기술 태그 | GitHub에 존재하지 않음 |
-
-추정·미입력 항목에는 `needsReview: [...]`가 붙는다. 사람이 확인하고 그 줄을 지우면 된다.
-**손으로 고친 값은 재실행해도 덮어쓰이지 않는다.**
-
-## 토큰 — fine-grained PAT
-
-`Settings → Developer settings → Personal access tokens → Fine-grained tokens`
-
-| 항목 | 값 |
-|---|---|
-| Resource owner | HSF org (개인 계정 아님) |
-| Repository access | Only select repositories → HSF 저장소들 |
-| Repository permissions | `Contents: Read`, `Issues: Read`, `Pull requests: Read`, `Metadata: Read` |
-| Organization permissions | `Members: Read` (활동 없는 인원까지 명부에 넣으려면) |
-| Expiration | 최대 366일 — 만료일을 캘린더에 등록해 둘 것 |
-
-권한이 미리 채워진 생성 링크:
-<https://github.com/settings/personal-access-tokens/new?name=HSF+Dashboard+Sync&contents=read&issues=read&pull_requests=read&members=read&expires_in=366>
-
-Actions Secret 이름은 `HSF_SYNC_TOKEN`.
-
-> - Actions 기본 `GITHUB_TOKEN`은 쓰지 마라. 저장소당 1,000회/시간이고 다른 repo를 못 읽는다.
-> - fine-grained PAT은 **조직 하나만** 접근할 수 있다. HSF 저장소가 여러 org에 흩어져 있으면
->   GitHub App으로 가야 한다.
-> - org에서 승인 정책을 켜 뒀다면 토큰이 `pending` 상태로 대기하고, 승인 전까지는
->   공개 저장소만 읽힌다.
+- **Java 21 / Spring Boot 4 / PostgreSQL 16**
+- JPA 엔티티 없이 **JdbcTemplate + SQL**. 이 프로젝트는 읽기가 대부분이고
+  핵심이 집계 쿼리라서 ORM 이 벌어주는 게 거의 없다.
+- 화면은 빌드 도구 없는 **단일 HTML 파일**. 화면 5개, 상태 관리가 필요 없는 규모라
+  프레임워크를 얹으면 배포 단계만 늘어난다.
 
 ## 화면
 
-`web/contributor.html` — 파일을 그대로 열면 내장 샘플로 렌더되고,
-정적 서버로 띄우면 `data/contributors/{login}.json`을 읽는다.
+| 경로 | 화면 | 접근 |
+|---|---|---|
+| `/#/` | 개요 — 커밋 추이, 프로젝트별 현황, 최근 커밋 | 공개 |
+| `/#/members` | 멤버 — 활동량, 활동 상태, 최근 12주 추이 | 공개 |
+| `/#/members/{login}` | 멤버 상세 — 1년 히트맵, 월별, 프로젝트별 기여 | 공개 |
+| `/#/report` | 명단 뽑기 — 기간·프로젝트 필터, CSV 내려받기 | 운영진 |
+| `/login` | 운영진 로그인 | 공개 |
+
+## 로컬에서 실행하기
 
 ```bash
-npx serve .        # → http://localhost:3000/web/contributor.html?login=handong-dev
+# 1. PostgreSQL 준비
+brew install postgresql@16
+brew services start postgresql@16
+createdb hsf_dashboard
+
+# 2. 환경변수 (파일에 적지 말 것)
+export HSF_SYNC_TOKEN=github_pat_...      # GitHub 읽기 토큰
+export HSF_ADMIN_PASSWORD=...             # 운영진 비밀번호
+
+# 3. 실행
+./gradlew bootRun
 ```
 
-## 생성되는 JSON
+테이블은 Flyway 가 자동으로 만든다. `http://localhost:8080` 으로 접속.
 
-| 파일 | 화면 | 크기 |
+관리자 비밀번호가 없으면 **앱이 아예 뜨지 않는다.** 무방비 상태로 배포되는 사고를 막기 위해서다.
+
+### GitHub 토큰
+
+[Fine-grained personal access token](https://github.com/settings/personal-access-tokens/new) 을 만든다.
+HandongSF 저장소가 모두 공개라 **개인 계정 소유 + Public Repositories (read-only)** 로 충분하다.
+조직 소유 토큰은 승인 절차가 필요하므로 굳이 쓰지 않는다.
+
+토큰은 발급 화면에서 한 번만 보여준다. 잃어버리면 Regenerate 로 새로 받으면 된다.
+
+## 처음 데이터 채우기
+
+```bash
+# 조직 저장소 전체 등록 (포크·빈 저장소는 자동 제외)
+curl -X POST "localhost:8080/api/admin/repositories/import" -u hsf:비밀번호
+
+# 커밋 가져오기 — 처음엔 전체 이력이라 몇 분 걸린다
+curl -X POST localhost:8080/api/admin/sync -u hsf:비밀번호
+
+# 커밋한 사람을 회원으로 등록
+curl -X POST localhost:8080/api/admin/members/from-accounts -u hsf:비밀번호
+```
+
+## API
+
+### 공개
+
+| 메서드 | 경로 | 설명 |
 |---|---|---|
-| `meta.json` | 공통 (학기 목록, 미등록 기여자) | ~2KB |
-| `overview.json` | Overview 전체 | ~10KB |
-| `rankings/{학기}.json`, `rankings/all-time.json` | Rankings | ~40KB |
-| `projects.json` | Projects 목록 | ~10KB |
-| `projects/{slug}.json` | Projects 상세 | ~8KB |
-| `contributors.json` | Contributors 목록 · 검색 | ~30KB |
-| `contributors/{login}.json` | 개인 이력 (히트맵 포함) | ~5KB |
+| GET | `/api/bootstrap` | 화면이 쓰는 데이터 전부 (프로젝트·멤버·커밋) |
 
-**한 파일에 다 넣지 마라.** 156명 × 365일을 통짜로 만들면 수 MB가 되고 첫 로딩이 죽는다.
-히트맵은 `{start, counts[365]}` 정수 배열로 압축했다 — 날짜를 키로 쓰면 10배 커진다.
+### 운영진
 
-## 프론트에서 쓰는 법
+| 메서드 | 경로 | 설명 |
+|---|---|---|
+| GET | `/api/admin/reports/active-members` | 기간별 참여자 명단 |
+| GET | `/api/admin/reports/active-members.csv` | 같은 명단을 CSV 로 |
+| POST | `/api/admin/repositories/import` | 조직 저장소 일괄 등록 |
+| GET | `/api/admin/repositories` | 등록된 저장소 목록 |
+| POST | `/api/admin/repositories/{id}/exclude` | 저장소를 집계에서 빼기 |
+| POST | `/api/admin/sync` | 지금 바로 동기화 |
+| GET | `/api/admin/sync/status` | 최근 동기화 이력 |
+| GET | `/api/admin/sync/summary` | 저장소별 커밋 현황 |
+| GET | `/api/admin/members` | 회원 목록 |
+| POST | `/api/admin/members/from-accounts` | 미등록 계정을 회원으로 등록 |
+| PATCH | `/api/admin/members/{id}` | 실명·역할 수정 |
+| POST | `/api/admin/members/{keep}/merge/{merge}` | 같은 사람의 계정 두 개 합치기 |
+
+명단 조회 파라미터: `from`, `to` (둘 다 포함), `projects` (slug 쉼표 구분), `minCommits`.
+
+```bash
+curl "localhost:8080/api/admin/reports/active-members?from=2026-03-02&to=2026-06-19&projects=histudy" -u hsf:비밀번호
+```
+
+## 데이터 모델
+
+| 테이블 | 역할 |
+|---|---|
+| `project` | 저장소 묶음. histudy-fe + histudy-be = 프로젝트 하나 |
+| `repository` | 실제 GitHub 저장소. `excluded` 로 집계에서 뺄 수 있다 |
+| `member` | 사람. GitHub 이 모르는 정보(실명, 역할)를 담는다 |
+| `github_account` | GitHub 계정. 한 사람이 계정 두 개일 수 있어 `member` 와 N:1 |
+| `commit_email` | 커밋 이메일 → 계정 매칭 보조 |
+| `commit_log` | **커밋 원본.** 이 프로젝트의 핵심 |
+| `pull_request` | PR (통계용, 명단에는 아직 미사용) |
+| `sync_log` | 동기화 이력. 문제가 생기면 여기부터 본다 |
+
+테이블 이름이 `commit` 이 아니라 `commit_log` 인 이유는 `commit` 이 SQL 키워드라
+쿼리마다 따옴표를 붙여야 하는 상황이 생기기 때문이다.
+
+## 운영하면서 알아야 할 것
+
+**기본 브랜치에 올라온 커밋만 잡힌다.** 머지되지 않은 브랜치의 커밋은 들어오지 않는다.
+마일리지 기준으로는 "머지된 기여"만 세는 게 오히려 타당해서 이대로 두고 있다.
+
+**동기화는 마지막 시점보다 하루 앞에서부터 다시 훑는다.** 늦게 푸시된 커밋을
+놓치지 않기 위해서다. `sha` 기준으로 덮어쓰기 때문에 중복은 생기지 않는다.
+
+**집계에서 빼야 할 저장소가 생기면** 지우지 말고 `exclude` 를 쓴다. 지우면
+조직 저장소를 다시 등록할 때 또 들어온다. 현재 제외된 것:
+
+- `cloud_storage` — 외부 오픈소스를 가져온 저장소 (커밋 3천 건, 저자 150명이 섞여 들어왔다)
+- `EnCus` — HSF 활동 대상이 아님
+
+**여러 저장소를 한 프로젝트로 묶는 건 수동이다.** 자동 등록은 저장소 하나당
+프로젝트 하나로 만든다. 묶으려면:
+
+```sql
+UPDATE project SET slug='camticket', name='camticket' WHERE slug='camticket-fe';
+UPDATE repository SET project_id=(SELECT id FROM project WHERE slug='camticket')
+ WHERE name='camticket-be';
+DELETE FROM project WHERE slug='camticket-be';
+```
+
+**개인정보는 저장하지 않는다.** 학번·학과는 설계 단계에서 넣었다가 제거했다(V4).
+지금 다루는 건 GitHub 공개 활동 기록뿐이다.
+
+**차트 색은 전체 기간 활동량 순으로 배정된다.** 화면에서 고른 기간으로 정렬하면
+필터를 바꿀 때마다 색이 재배치돼서 같은 색이 다른 프로젝트를 가리키게 된다.
+팔레트가 8색이라 9번째부터는 색을 돌려쓰지 않고 회색으로 둔다.
+
+## 학기 정의
+
+명단 화면의 학기 프리셋은 `src/main/resources/static/index.html` 상단의 `TERMS` 에 있다.
+새 학기가 시작되면 여기에 한 줄 추가한다.
 
 ```js
-const res = await fetch('/data/overview.json');
-const { kpi, topContributors, velocity, recentActivities, attention } = await res.json();
+const TERMS = [
+  {code: '2026-1', name: '2026 1학기', from: '2026-03-02', to: '2026-06-19'},
+  ...
+];
 ```
 
-프론트는 **계산하지 않는다.** 정렬·집계·점수는 전부 sync 단계에서 끝난다.
-필터링(프로젝트/역할)과 페이지네이션만 클라이언트에서 한다.
+## 이전 버전
 
-## 설계상 지켜야 할 것
+v1(GitHub Actions + 정적 JSON)은 `v1-final` 태그에 보존되어 있다.
 
-- **날짜는 KST 기준.** UTC로 자르면 밤 9시 이후 커밋이 전날로 밀려 히트맵이 어긋난다.
-- **제외한 데이터는 지우지 않는다.** merge commit·봇·셀프리뷰는 원본 카운트를 보존하고 점수에서만 뺀다.
-- **점수 정책을 바꾸면 `version`을 올린다.** `meta.json`에 박히므로 "언제 왜 순위가 바뀌었는지" 추적된다.
-- **줄 수는 점수에 넣지 않는다.** 넣으면 코드를 길게 쓰는 인센티브가 생긴다 (`linesAffectScore: false`).
-
-## 나중에 DB가 필요해지는 시점
-
-읽기 전용인 동안은 이 구조로 충분하다. 아래가 필요해지면 Postgres로 넘어가라.
-
-- 사이트에서 **값을 수정**하는 기능 (역할 변경, 코멘트, 승인)
-- 임의 기간 조회 (`3월 2일 ~ 4월 7일`)
-- 로그인 / 권한 분리
-- 기여자 500명 초과
-
-그때도 `aggregate.mjs`의 일별 집계 구조를 그대로 `contribution_daily` 테이블에 INSERT하면 된다.
-수집·집계 로직은 재사용되고 출력 대상만 바뀐다. (`hsf_schema.sql` 참고)
+```bash
+git checkout v1-final
+```

@@ -58,6 +58,12 @@ public class SecurityConfig {
                     .permitAll())
             .logout(out -> out.logoutSuccessUrl("/login?logout"))
 
+            // curl 이나 스크립트는 폼 로그인을 쓸 수 없으므로 Basic 인증도 함께 연다.
+            // 브라우저 로그인 창이 뜨지 않도록 401 만 돌려준다 (WWW-Authenticate 를 안 보냄).
+            // curl -u 는 자격증명을 먼저 보내므로 이것으로 충분하다.
+            .httpBasic(basic -> basic.authenticationEntryPoint(
+                    (req, res, e) -> res.sendError(401, "로그인이 필요합니다")))
+
             // 화면이 fetch 로 부르는 API 는 로그인 페이지로 넘기지 말고 401 을 준다.
             // 그래야 화면이 "로그인이 필요합니다" 를 직접 보여줄 수 있다.
             // 경로를 직접 보는 이유: 매처 클래스는 Spring Security 버전마다 바뀌어 왔다.

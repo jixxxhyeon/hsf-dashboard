@@ -77,18 +77,13 @@ public class ReportController {
 
         List<Map<String, Object>> rows = query(from, to, parseSlugs(projects), minCommits);
 
+        // 사업단 제출 양식: GitHub 아이디와 활동 프로젝트명 두 칸만.
+        // 화면에는 커밋 수 같은 지표가 더 나오지만, 파일에는 제출에 필요한 것만 담는다.
         StringBuilder sb = new StringBuilder("﻿");
-        sb.append("이름,GitHub,참여 프로젝트,커밋,활동일,첫 커밋,마지막 커밋,추가,삭제\r\n");
+        sb.append("GitHub 아이디,활동 프로젝트\r\n");
         for (Map<String, Object> r : rows) {
-            sb.append(csv(r.get("name"))).append(',')
-              .append(csv(r.get("login"))).append(',')
-              .append(csv(String.join(" / ", asList(r.get("projects"))))).append(',')
-              .append(csv(r.get("commits"))).append(',')
-              .append(csv(r.get("activeDays"))).append(',')
-              .append(csv(r.get("first"))).append(',')
-              .append(csv(r.get("last"))).append(',')
-              .append(csv(r.get("additions"))).append(',')
-              .append(csv(r.get("deletions"))).append("\r\n");
+            sb.append(csv(r.get("login"))).append(',')
+              .append(csv(String.join(" / ", asList(r.get("projects"))))).append("\r\n");
         }
 
         String filename = "HSF_활동명단_" + from + "_" + to + ".csv";
