@@ -286,6 +286,7 @@ async function fetchReport(s) {
   const q = new URLSearchParams({from: s.from, to: s.to, minCommits: s.min});
   if (s.projects.length) q.set('projects', s.projects.join(','));
   const res = await fetch(`${API_BASE}/admin/reports/active-members?${q}`);
+  if (res.status === 401) throw new Error('LOGIN_REQUIRED');
   if (!res.ok) throw new Error(`명단 조회 실패 (${res.status})`);
   return res.json();
 }
@@ -994,14 +995,22 @@ async function render() {
   $('#pg-title').textContent = hit.title;
   $('#pg-sub').textContent = hit === ROUTES[2] ? (DB.memberBy[arg]?.name || arg) : hit.sub;
   $('#pg-actions').innerHTML = hit === ROUTES[3]
-    ? `<button class="btn" id="a-csv">CSV 내려받기</button><button class="btn" id="a-print">인쇄</button>` : '';
+    ? `<button class="btn" id="a-csv">CSV 내려받기</button><button class="btn" id="a-print">인쇄</button>
+       <form method="post" action="/logout" style="display:inline"><button class="btn" type="submit">로그아웃</button></form>` : '';
 
   hideTip();
   try {
     await hit.view(arg);
   } catch (e) {
-    $('#view').innerHTML = `<section class="card"><div class="empty">
-      <b>데이터를 불러오지 못했습니다</b>${esc(e.message)}</div></section>`;
+    $('#view').innerHTML = e.message === 'LOGIN_REQUIRED'
+      ? `<section class="card"><div class="empty">
+           <b>운영진 로그인이 필요합니다</b>
+           명단에는 참여자 정보가 들어 있어 로그인한 운영진만 볼 수 있습니다.
+           <div style="margin-top:14px"><a class="btn" href="/login">로그인</a></div>
+         </div></section>`
+      : `<section class="card"><div class="empty">
+           <b>데이터를 불러오지 못했습니다</b>${esc(e.message)}</div></section>`;
+    $('#pg-actions').innerHTML = '';
     return;
   }
 

@@ -32,6 +32,9 @@ hsf:
   github:
     api-url: https://api.github.com/graphql
     token: ${HSF_SYNC_TOKEN:}            # 터미널 환경변수로 넣는다. 파일에 적지 말 것.
+  admin:
+    username: ${HSF_ADMIN_USER:hsf}
+    password: ${HSF_ADMIN_PASSWORD:}     # 환경변수로만 넣는다. 파일에 적지 말 것.
   sync:
     enabled: false                       # 스케줄러는 동기화 코드 완성 후에 켠다
     cron: "0 0 */6 * * *"                # 6시간마다
