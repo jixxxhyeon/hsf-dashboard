@@ -68,7 +68,15 @@ nav a:hover{background:var(--line2)}
 nav a.on{background:var(--accent-soft);color:var(--accent)}
 nav svg{width:16px;height:16px;flex:none;stroke:currentColor;fill:none;stroke-width:1.8;
         stroke-linecap:round;stroke-linejoin:round}
-.sidefoot{margin-top:auto;padding:10px;font-size:11px;color:var(--muted2);line-height:1.5}
+.adminbox{margin-top:auto;padding:10px;display:flex;flex-direction:column;gap:8px;
+          border-top:1px solid var(--line2)}
+.adminbox .btn{width:100%;text-align:center}
+.adminbox[hidden]{display:none}
+.adminbox[hidden] + .sidefoot{margin-top:auto}
+.adm-on{display:flex;align-items:center;gap:6px;font-size:12px;font-weight:700;color:var(--accent)}
+.adm-on i{width:7px;height:7px;border-radius:50%;background:var(--accent);display:block}
+.adm-on .mono{margin-left:auto;font-size:11.5px;color:var(--muted);font-weight:600}
+.sidefoot{padding:4px 10px 0;font-size:11px;color:var(--muted2);line-height:1.5}
 
 .mainarea{min-width:0;display:flex;flex-direction:column}
 .top{background:var(--card);border-bottom:1px solid var(--line);padding:13px 26px;
@@ -214,12 +222,9 @@ tbody tr:last-child td{border-bottom:0}
         <svg viewBox="0 0 24 24"><circle cx="9" cy="8" r="3.2"/><path d="M3 20c0-3.3 2.7-5.5 6-5.5s6 2.2 6 5.5"/><path d="M16 8.5a3 3 0 100-1M18 20c0-2.6-1-4.3-2.5-5.2"/></svg>멤버</a>
     </nav>
 
-    <div class="navsec">관리</div>
-    <nav>
-      <a href="#/report" data-r="/report">
-        <svg viewBox="0 0 24 24"><path d="M6 3h9l4 4v14H6z"/><path d="M15 3v4h4M9 12h7M9 16h5"/></svg>명단 뽑기</a>
-    </nav>
+    <div id="admin-nav" hidden></div>
 
+    <div class="adminbox" id="adminbox" hidden></div>
     <div class="sidefoot" id="sidefoot"></div>
   </aside>
 
@@ -239,7 +244,8 @@ tbody tr:last-child td{border-bottom:0}
 /* ══════════════════════════════════════════════════════════════════════
    서버 연결
    - /api/bootstrap            공개 데이터 (학번·학과 없음)
-   - /api/admin/reports/...    명단 (학번·학과 포함, 관리자 전용)
+   - /api/admin/me             관리자 모드 확인 (/admin 주소에서만 부른다)
+   - /api/admin/reports/...    명단 (관리자 전용)
    ══════════════════════════════════════════════════════════════════════ */
 const API_BASE = '/api';
 
@@ -264,12 +270,7 @@ async function loadBootstrap() {
   DB.projects = d.projects || [];
   DB.memberBy  = Object.fromEntries(DB.members.map(m => [m.login, m]));
   DB.projectBy = Object.fromEntries(DB.projects.map(p => [p.slug, p]));
-  // 프로젝트 → 색 슬롯 고정.
-  // 서버가 활동량 순으로 정렬해서 주므로, 활동이 많은 프로젝트가 앞 색을 갖는다.
-  // 필터를 바꿔도 이 배정은 그대로다 — 색이 프로젝트를 따라다녀야 읽을 수 있다.
-  // 팔레트가 8색이라, 9번째부터는 색을 돌려쓰지 않고 회색으로 둔다.
-  // 돌려쓰면 같은 색이 두 프로젝트를 가리켜서 차트를 잘못 읽게 된다.
-  DB.projects.forEach((p, i) => p.color = i < 8 ? `var(--series-${i + 1})` : 'var(--muted2)');
+  assignProjectColors(DB.projects, DB.commits);   // 색 규칙은 아래 "프로젝트 색 규칙" 참고
 
   TODAY = d.today || TODAY;
   PRESETS = [
@@ -281,7 +282,55 @@ async function loadBootstrap() {
   ];
 }
 
-/** 명단은 공개 데이터가 아니라 관리자 API 에서 직접 받는다 (학번·학과 포함). */
+/* ══════════════════════════════════════════════════════════════════════
+   관리자 모드
+   - 관리자 화면은 주소창에 /admin 을 직접 쳐야만 열린다. 공개 화면(/)에는 버튼도 메뉴도 없다.
+   - /admin 은 서버가 로그인을 강제한다 (안 했으면 /login 으로 보냄 → 로그인 후 /admin 으로 복귀).
+   - 관리자 API 가 401 을 주면(세션 만료) alert 로 알리고 로그인 화면으로 보낸다.
+   ══════════════════════════════════════════════════════════════════════ */
+const ADMIN_PAGE = location.pathname.replace(/\/+$/, '') === '/admin';
+let ADMIN = null;              // 로그인한 관리자 아이디. null 이면 공개 모드
+
+async function checkAdmin() {
+  if (!ADMIN_PAGE) return null;          // 공개 주소에서는 관리자 여부를 묻지도 않는다
+  try {
+    const res = await fetch(`${API_BASE}/admin/me`, {cache: 'no-store'});
+    ADMIN = res.ok ? (await res.json()).username : null;
+  } catch { ADMIN = null; }    // 네트워크 오류면 공개 모드로 둔다
+  renderAdminUi();
+  return ADMIN;
+}
+
+function renderAdminUi() {
+  // 관리 메뉴는 HTML 에 미리 두지 않고 여기서 만든다 — 공개 화면에는 요소 자체가 없다.
+  $('#admin-nav').hidden = !ADMIN;
+  $('#admin-nav').innerHTML = ADMIN ? `
+    <div class="navsec">관리자 모드</div>
+    <nav>
+      <a href="#/report" data-r="/report">
+        <svg viewBox="0 0 24 24"><path d="M6 3h9l4 4v14H6z"/><path d="M15 3v4h4M9 12h7M9 16h5"/></svg>명단 뽑기</a>
+    </nav>` : '';
+  $('#adminbox').hidden = !ADMIN;
+  $('#adminbox').innerHTML = ADMIN
+    ? `<div class="adm-on"><i></i>관리자 모드<span class="mono">${esc(ADMIN)}</span></div>
+       <form method="post" action="/logout"><button class="btn sm" type="submit">로그아웃</button></form>`
+    : '';
+}
+
+/** 관리자 API 가 401 을 돌려줬을 때. 한 번만 알리고 로그인 화면으로 보낸다. */
+let authAlerted = false;
+function authFail() {
+  if (authAlerted) return;
+  authAlerted = true;
+  alert(ADMIN
+    ? '로그인 시간이 만료되었습니다.\n다시 로그인해 주세요.'
+    : '관리자 로그인이 필요합니다.\n로그인 화면으로 이동합니다.');
+  ADMIN = null;
+  renderAdminUi();
+  location.href = '/login';
+}
+
+/** 명단은 공개 데이터가 아니라 관리자 API 에서 직접 받는다. */
 async function fetchReport(s) {
   const q = new URLSearchParams({from: s.from, to: s.to, minCommits: s.min});
   if (s.projects.length) q.set('projects', s.projects.join(','));
@@ -289,6 +338,72 @@ async function fetchReport(s) {
   if (res.status === 401) throw new Error('LOGIN_REQUIRED');
   if (!res.ok) throw new Error(`명단 조회 실패 (${res.status})`);
   return res.json();
+}
+
+/* ══════════════════════════════════════════════════════════════════════
+   프로젝트(레포) 색 규칙
+   ──────────────────────────────────────────────────────────────────────
+   팔레트 8색을 순서대로 나눠주던 방식은 9번째부터 회색이 됐다. 대신 공식으로 만든다.
+
+   ① 색상(hue)  = 이름(slug) 해시(FNV-1a) % 360
+                  → 무작위처럼 흩어지지만, 같은 이름은 언제 어디서나 같은 색.
+   ② 겹침 방지  = 이미 배정된 색과 HUE_GAP° 이내면 황금각(137.5°)만큼 돌려서 다시 본다.
+                  끝내 자리가 없으면 기존 색들과 가장 먼 색상을 고른다.
+                  배정 순서는 slug 알파벳순 — 커밋 순위가 바뀌어도 색이 뒤섞이지 않는다.
+   ③ 진하기     = 전체 기간 누적 커밋 수 단계(COLOR_TIERS). 커밋이 늘면 단계가 올라가
+                  라이트 모드는 더 진하고 선명하게, 다크 모드는 더 밝고 선명하게 바뀐다.
+                  화면에서 고른 기간이 아니라 "전체 기간" 기준이라 필터를 바꿔도 색은 그대로다.
+   ④ 검정 방지  = OKLCH 로 만든다. OKLCH 의 L 은 눈으로 느끼는 밝기라서, 파랑·보라처럼
+                  원래 어두워 보이는 색도 같은 L 이면 같은 밝기로 보인다.
+                  L 하한(라이트 0.52 / 다크 0.54)과 채도 하한(0.10)을 두어 검정·회색으로 보이지 않는다.
+   ══════════════════════════════════════════════════════════════════════ */
+const HUE_GAP = 30;
+const COLOR_TIERS = [            // min: 누적 커밋 하한 · L/C: 라이트 · Ld/Cd: 다크
+  {min: 0,   label: '50건 미만',  L: 0.72, C: 0.10, Ld: 0.54, Cd: 0.11},
+  {min: 50,  label: '50건 이상',  L: 0.67, C: 0.13, Ld: 0.57, Cd: 0.12},
+  {min: 100, label: '100건 이상', L: 0.62, C: 0.15, Ld: 0.60, Cd: 0.13},
+  {min: 200, label: '200건 이상', L: 0.57, C: 0.16, Ld: 0.63, Cd: 0.14},
+  {min: 500, label: '500건 이상', L: 0.52, C: 0.17, Ld: 0.66, Cd: 0.15}
+];
+
+function hashHue(str) {
+  let h = 0x811c9dc5;                                  // FNV-1a 32bit
+  for (const ch of str) { h ^= ch.codePointAt(0); h = Math.imul(h, 0x01000193); }
+  return (h >>> 0) % 360;
+}
+const hueDist = (a, b) => { const d = Math.abs(a - b) % 360; return Math.min(d, 360 - d); };
+const tierOf = n => COLOR_TIERS.reduce((t, x, i) => n >= x.min ? i : t, 0);
+
+function assignProjectColors(projects, commits) {
+  const total = {};
+  for (const c of commits) total[c.project] = (total[c.project] || 0) + 1;
+
+  const used = [];
+  let light = '', dark = '', fallback = '';
+  [...projects].sort((a, b) => a.slug.localeCompare(b.slug)).forEach(p => {
+    let h = hashHue(p.slug);
+    for (let k = 0; k < 24 && used.some(u => hueDist(u, h) < HUE_GAP); k++) h = (h + 137.508) % 360;
+    h = Math.round(h * 10) / 10;
+    // 그래도 자리가 없으면(프로젝트가 많아 색상환이 꽉 찬 경우) 남은 색 중 가장 먼 곳을 쓴다
+    if (used.some(u => hueDist(u, h) < HUE_GAP)) {
+      const gapAt = x => Math.min(...used.map(u => hueDist(u, x)));
+      for (let x = 0; x < 360; x++) if (gapAt(x) > gapAt(h)) h = x;
+    }
+    used.push(h);
+
+    const n = total[p.slug] || 0, ti = tierOf(n), t = COLOR_TIERS[ti];
+    const v = `--pc-${projects.indexOf(p)}`;
+    light    += `${v}:oklch(${t.L} ${t.C} ${h});`;
+    dark     += `${v}:oklch(${t.Ld} ${t.Cd} ${h});`;
+    fallback += `${v}:hsl(${h},62%,${Math.round(t.L * 100 - 12)}%);`;   // OKLCH 미지원 브라우저용
+    Object.assign(p, {color: `var(${v})`, hue: h, totalCommits: n, tier: ti});
+  });
+
+  let el = document.getElementById('project-colors');
+  if (!el) { el = document.createElement('style'); el.id = 'project-colors'; document.head.appendChild(el); }
+  el.textContent = `:root{${light}}
+@media (prefers-color-scheme:dark){:root:where(:not([data-theme="light"])){${dark}}}
+@supports not (color:oklch(0 0 0)){:root{${fallback}}}`;
 }
 
 /* ── 유틸 ── */
@@ -599,7 +714,8 @@ function viewOverview() {
 
     <div class="cols">
       <section class="card">
-        <div class="card-hd"><h2>프로젝트</h2></div>
+        <div class="card-hd"><h2>프로젝트</h2>
+          <span class="hint" title="색상은 프로젝트 이름으로 정해지고, 진하기는 전체 기간 누적 커밋 수(50·100·200·500건)에 따라 달라집니다">색이 선명할수록 누적 커밋이 많음</span></div>
         <div class="tablewrap"><table><thead><tr>
           <th>프로젝트</th><th class="r">커밋</th><th class="r">참여</th><th class="r">최근 활동</th>
         </tr></thead><tbody>
@@ -968,11 +1084,24 @@ async function viewReport() {
 }
 
 /* ── CSV ── */
-function downloadCsv() {
+// location.href 로 바로 넘기면 세션이 끊겼을 때 401 오류 페이지로 넘어가 버린다.
+// 그래서 로그인 상태를 먼저 확인하고, 살아 있을 때만 내려받는다.
+// (파일 저장 자체는 브라우저에 맡긴다 — 서버가 보내는 한글 파일명이 그대로 유지된다.)
+async function downloadCsv(btn) {
   const s = state.rep;
   const q = new URLSearchParams({from: s.from, to: s.to, minCommits: s.min});
   if (s.projects.length) q.set('projects', s.projects.join(','));
-  location.href = `${API_BASE}/admin/reports/active-members.csv?${q}`;
+  btn.disabled = true;
+  try {
+    const res = await fetch(`${API_BASE}/admin/me`, {cache: 'no-store'});
+    if (res.status === 401) return authFail();
+    if (!res.ok) { alert(`CSV 파일을 만들지 못했습니다. (서버 응답 ${res.status})`); return; }
+    location.href = `${API_BASE}/admin/reports/active-members.csv?${q}`;
+  } catch (e) {
+    alert('서버에 연결하지 못했습니다.\n' + e.message);
+  } finally {
+    btn.disabled = false;
+  }
 }
 
 /* ══ 라우터 ══ */
@@ -980,10 +1109,15 @@ const ROUTES = [
   {re: /^\/?$/,                   title: '개요',      sub: 'HSF 오픈소스 활동 현황',        view: viewOverview},
   {re: /^\/members$/,             title: '멤버',      sub: '참여자별 활동량',               view: viewMembers},
   {re: /^\/members\/(.+)$/,       title: '멤버',      sub: '',                              view: viewMember},
-  {re: /^\/report$/,              title: '명단 뽑기', sub: '기간별 활동 참여자 (관리자)',   view: viewReport}
+  // 관리자 전용 — /admin 주소에서만 존재하는 경로. 공개 주소에서 #/report 를 쳐도 개요로 돌아간다.
+  ...(ADMIN_PAGE ? [
+  {re: /^\/report$/,              title: '명단 뽑기', sub: '기간별 활동 참여자 · 관리자 모드', view: viewReport, admin: true}
+  ] : [])
 ];
 
 async function render() {
+  // /admin 으로 들어오면 첫 화면은 명단 뽑기
+  if (ADMIN_PAGE && (!location.hash || location.hash === '#')) { location.replace('#/report'); return; }
   const path = (location.hash || '#/').slice(1);
   let hit = null, arg = null;
   for (const r of ROUTES) { const m = path.match(r.re); if (m) { hit = r; arg = m[1]; break; } }
@@ -994,27 +1128,37 @@ async function render() {
 
   $('#pg-title').textContent = hit.title;
   $('#pg-sub').textContent = hit === ROUTES[2] ? (DB.memberBy[arg]?.name || arg) : hit.sub;
-  $('#pg-actions').innerHTML = hit === ROUTES[3]
-    ? `<button class="btn" id="a-csv">CSV 내려받기</button><button class="btn" id="a-print">인쇄</button>
-       <form method="post" action="/logout" style="display:inline"><button class="btn" type="submit">로그아웃</button></form>` : '';
+  $('#pg-actions').innerHTML = hit.admin
+    ? `<button class="btn" id="a-csv">CSV 내려받기</button><button class="btn" id="a-print">인쇄</button>` : '';
 
   hideTip();
+
+  // 관리자 화면인데 로그인 정보가 없으면 (세션 만료 등) 알리고 로그인 화면으로.
+  if (hit.admin && !ADMIN && !(await checkAdmin())) {
+    $('#view').innerHTML = `<section class="card"><div class="empty">
+      <b>관리자 로그인이 필요합니다</b>명단에는 참여자 정보가 들어 있어 로그인한 운영진만 볼 수 있습니다.</div></section>`;
+    $('#pg-actions').innerHTML = '';
+    authFail();
+    return;
+  }
+
   try {
     await hit.view(arg);
   } catch (e) {
     $('#view').innerHTML = e.message === 'LOGIN_REQUIRED'
       ? `<section class="card"><div class="empty">
-           <b>운영진 로그인이 필요합니다</b>
+           <b>관리자 로그인이 필요합니다</b>
            명단에는 참여자 정보가 들어 있어 로그인한 운영진만 볼 수 있습니다.
            <div style="margin-top:14px"><a class="btn" href="/login">로그인</a></div>
          </div></section>`
       : `<section class="card"><div class="empty">
            <b>데이터를 불러오지 못했습니다</b>${esc(e.message)}</div></section>`;
     $('#pg-actions').innerHTML = '';
+    if (e.message === 'LOGIN_REQUIRED') authFail();
     return;
   }
 
-  if (hit === ROUTES[3]) { $('#a-csv').onclick = downloadCsv; $('#a-print').onclick = () => print(); }
+  if (hit.admin) { $('#a-csv').onclick = e => downloadCsv(e.currentTarget); $('#a-print').onclick = () => print(); }
   scrollTo(0, 0);
 }
 
@@ -1034,7 +1178,14 @@ addEventListener('hashchange', render);
   }
   $('#sidefoot').innerHTML =
     `커밋 ${fmt(DB.commits.length)}건 · 멤버 ${DB.members.length}명<br>프로젝트 ${DB.projects.length}개<br>기준일 ${TODAY}`;
+  await checkAdmin();
   render();
+
+  // 로그아웃하면 서버가 /?logout 으로 돌려보낸다
+  if (new URLSearchParams(location.search).has('logout')) {
+    history.replaceState(null, '', '/' + location.hash);
+    setTimeout(() => alert('로그아웃되었습니다.'), 50);
+  }
 })();
 </script>
 </body>

@@ -14,7 +14,8 @@ import org.springframework.security.web.SecurityFilterChain;
  * 접근 제어.
  *
  *  - 공개: 대시보드 화면, /api/bootstrap
- *  - 관리자: /api/admin/**  (명단, 동기화, 회원 관리)
+ *  - 관리자: /admin (관리자 화면 — 주소를 직접 쳐야만 들어온다)
+ *           /api/admin/**  (명단, 동기화, 회원 관리)
  *
  * 관리자 계정은 하나뿐이고 환경변수로 넣는다.
  *   export HSF_ADMIN_USER=hsf
@@ -47,16 +48,17 @@ public class SecurityConfig {
     public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
         http
             .authorizeHttpRequests(auth -> auth
-                .requestMatchers("/api/admin/**").hasRole("ADMIN")
+                .requestMatchers("/admin", "/admin/", "/api/admin/**").hasRole("ADMIN")
                 .anyRequest().permitAll())
 
             // 로그인 화면은 직접 만든 것을 쓴다 (templates/login.html).
             // Spring Security 가 만들어주던 기본 화면은 최신 버전에서 사라졌다.
             .formLogin(form -> form
                     .loginPage("/login")
-                    .defaultSuccessUrl("/#/report", true)
+                    .defaultSuccessUrl("/admin", true)
                     .permitAll())
-            .logout(out -> out.logoutSuccessUrl("/login?logout"))
+            // 로그아웃하면 공개 대시보드로 돌아간다. ?logout 은 화면이 안내 alert 를 띄우는 신호.
+            .logout(out -> out.logoutSuccessUrl("/?logout"))
 
             // curl 이나 스크립트는 폼 로그인을 쓸 수 없으므로 Basic 인증도 함께 연다.
             // 브라우저 로그인 창이 뜨지 않도록 401 만 돌려준다 (WWW-Authenticate 를 안 보냄).

@@ -58,18 +58,19 @@ button:hover{filter:brightness(1.08)}
     <div class="brand">HSF <span>Dashboard</span><small>HANDONG SOFTWARE FOUNDATION</small></div>
 
     <div class="card">
-      <h1>운영진 로그인</h1>
+      <h1>관리자 모드 로그인</h1>
       <p class="sub">참여자 명단에는 활동 기록이 들어 있어<br>로그인한 운영진만 볼 수 있습니다.</p>
 
       <div class="msg err" th:if="${param.error}">아이디 또는 비밀번호가 맞지 않습니다.</div>
       <div class="msg ok"  th:if="${param.logout}">로그아웃되었습니다.</div>
 
-      <form method="post" th:action="@{/login}">
+      <!-- required 대신 직접 검사한다: 빈 칸도 브라우저 말풍선이 아니라 alert 로 알리기 위해 -->
+      <form method="post" th:action="@{/login}" id="login-form" novalidate>
         <label for="username">아이디</label>
-        <input type="text" id="username" name="username" autocomplete="username" autofocus required>
+        <input type="text" id="username" name="username" autocomplete="username" autofocus>
 
         <label for="password">비밀번호</label>
-        <input type="password" id="password" name="password" autocomplete="current-password" required>
+        <input type="password" id="password" name="password" autocomplete="current-password">
 
         <button type="submit">로그인</button>
       </form>
@@ -77,5 +78,27 @@ button:hover{filter:brightness(1.08)}
 
     <a class="back" href="/">← 대시보드로 돌아가기</a>
   </div>
+
+<script>
+// 로그인 예외처리 — 빈 칸 제출
+document.getElementById('login-form').addEventListener('submit', function (e) {
+  var id = document.getElementById('username'), pw = document.getElementById('password');
+  if (!id.value.trim()) { e.preventDefault(); alert('아이디를 입력해 주세요.'); id.focus(); return; }
+  if (!pw.value)        { e.preventDefault(); alert('비밀번호를 입력해 주세요.'); pw.focus(); return; }
+});
+</script>
+
+<!-- 로그인 예외처리 — 아이디·비밀번호 불일치 (Spring Security 가 /login?error 로 돌려보낸다) -->
+<script th:if="${param.error}">
+window.addEventListener('load', function () {
+  // 화면이 먼저 그려진 뒤에 띄운다. 새로고침해도 다시 뜨지 않도록 주소에서 ?error 를 지운다.
+  setTimeout(function () {
+    alert('아이디 또는 비밀번호가 맞지 않습니다.\n다시 확인해 주세요.');
+    history.replaceState(null, '', location.pathname);
+    var pw = document.getElementById('password');
+    pw.value = ''; pw.focus();
+  }, 50);
+});
+</script>
 </body>
 </html>

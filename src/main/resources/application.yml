@@ -25,7 +25,7 @@ spring:
     default-property-inclusion: non_null
 
 server:
-  port: 8080
+  port: ${SERVER_PORT:8080}            # 서버에서는 8081 로 띄운다 (8000 은 기존 서비스가 사용 중)
 
 # ── 이 프로젝트 전용 설정 ────────────────────────────────────────
 hsf:
@@ -36,10 +36,10 @@ hsf:
     username: ${HSF_ADMIN_USER:hsf}
     password: ${HSF_ADMIN_PASSWORD:}     # 환경변수로만 넣는다. 파일에 적지 말 것.
   sync:
-    enabled: false                       # 스케줄러는 동기화 코드 완성 후에 켠다
+    enabled: ${HSF_SYNC_ENABLED:false}   # 배포 후 첫 동기화가 잘 되면 true 로 켠다
     cron: "0 0 */6 * * *"                # 6시간마다
     overlap-days: 1                      # 마지막 동기화 시점보다 1일 앞에서부터 다시 훑는다
 
 logging:
   level:
-    net.lifove.hsf.dashboard: debug
+    net.lifove.hsf.dashboard: ${LOG_LEVEL:debug}
