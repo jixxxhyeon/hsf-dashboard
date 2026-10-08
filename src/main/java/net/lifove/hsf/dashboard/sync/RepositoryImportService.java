@@ -5,6 +5,9 @@ import org.slf4j.LoggerFactory;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 
+import java.time.Instant;
+import java.time.LocalDate;
+import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
@@ -18,6 +21,9 @@ import static net.lifove.hsf.dashboard.sync.Json.*;
  *
  * 이미 등록된 저장소는 건드리지 않는다. 그래서 histudy-fe / histudy-be 처럼
  * 손으로 묶어둔 프로젝트 구성이 이 작업 때문에 흐트러지지 않는다.
+ *
+ * 포크도 등록한다. 다만 포크에는 원본 저장소의 이력(남의 커밋)이 함께 들어 있으므로
+ * counted_from 을 포크 생성일로 잡아, 그 이후 커밋만 HSF 활동으로 센다.
  */
 @Service
 public class RepositoryImportService {
@@ -30,13 +36,21 @@ public class RepositoryImportService {
             repositories(first:100, after:$cursor, orderBy:{field:NAME, direction:ASC}) {
               pageInfo { hasNextPage endCursor }
               nodes {
-                name description isFork isArchived isEmpty isPrivate
+                name description isFork isArchived isEmpty isPrivate createdAt
                 defaultBranchRef { name }
               }
             }
           }
         }
         """;
+
+    /**
+     * HSF 활동으로 세지 않는 저장소 (운영진 결정, 2026-10).
+     * 남의 저장소를 참고용으로 포크만 해 둔 것들이라 등록하지 않는다.
+     */
+    static final java.util.Set<String> NOT_HSF_ACTIVITY = java.util.Set.of(
+            "KoreanUnificationParallelCorpus",
+            "WICWIU");
 
     private final JdbcTemplate jdbc;
     private final GithubGraphQlClient github;
@@ -73,13 +87,16 @@ public class RepositoryImportService {
             for (Object r : list(repos, "nodes")) {
                 String name = str(r, "name");
 
-                // 포크는 남의 코드라 기여 집계 대상이 아니다
-                if (bool(r, "isFork")) { skipped.add(name + " (포크)"); continue; }
+                if (NOT_HSF_ACTIVITY.contains(name)) { skipped.add(name + " (HSF 활동 아님)"); continue; }
                 // 커밋이 하나도 없는 저장소는 등록해도 볼 게 없다
                 if (bool(r, "isEmpty")) { skipped.add(name + " (빈 저장소)"); continue; }
                 if (!includeArchived && bool(r, "isArchived")) { skipped.add(name + " (보관됨)"); continue; }
 
-                if (registerRepository(org, name, r)) added.add(name);
+                // 포크는 생성일(=HSF 로 가져온 날) 이후 커밋만 센다. 그 이전은 원본 저장소의 이력이다.
+                LocalDate countedFrom = bool(r, "isFork") ? createdDate(r) : null;
+
+                if (registerRepository(org, name, r, countedFrom))
+                    added.add(name + (countedFrom != null ? " (포크 — " + countedFrom + " 이후만)" : ""));
                 else already.add(name);
             }
 
@@ -99,7 +116,7 @@ public class RepositoryImportService {
     }
 
     /** @return 새로 등록했으면 true, 이미 있었으면 false */
-    private boolean registerRepository(String owner, String name, Object node) {
+    private boolean registerRepository(String owner, String name, Object node, LocalDate countedFrom) {
         // count(*) 로 세는 이유: rs -> rs.next() 는 JdbcTemplate 의 두 오버로드에 모두 맞아
         // 컴파일러가 어느 쪽인지 고르지 못한다.
         Integer found = jdbc.queryForObject(
@@ -123,10 +140,18 @@ public class RepositoryImportService {
         }
 
         jdbc.update("""
-                INSERT INTO repository (project_id, owner, name, default_branch)
-                VALUES (?,?,?,?)
-                """, projectId, owner, name, str(obj(node, "defaultBranchRef"), "name", "main"));
+                INSERT INTO repository (project_id, owner, name, default_branch, counted_from)
+                VALUES (?,?,?,?, CAST(? AS DATE))
+                """, projectId, owner, name, str(obj(node, "defaultBranchRef"), "name", "main"),
+                countedFrom == null ? null : java.sql.Date.valueOf(countedFrom));
         return true;
+    }
+
+    /** GitHub createdAt(UTC) → 한국 날짜 */
+    private static LocalDate createdDate(Object node) {
+        String v = str(node, "createdAt");
+        if (v == null || v.isBlank()) return null;
+        return Instant.parse(v).atZone(ZoneId.of("Asia/Seoul")).toLocalDate();
     }
 
     /** jChecker-Engine → jchecker-engine */

@@ -147,7 +147,8 @@ public class ReportController {
             String memberName = rs.getString("member_name");
 
             r.put("login", login);
-            r.put("name", memberName != null ? memberName : login);
+            // 실명을 아직 안 채운 회원은 GitHub 아이디로 나간다
+            r.put("name", memberName != null && !memberName.isBlank() ? memberName : login);
             r.put("role", rs.getString("role"));
             r.put("registered", rs.getObject("member_id") != null);
             r.put("avatarUrl", githubId > 0

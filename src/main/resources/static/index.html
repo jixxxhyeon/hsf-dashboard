@@ -71,6 +71,8 @@ nav svg{width:16px;height:16px;flex:none;stroke:currentColor;fill:none;stroke-wi
 .adminbox{margin-top:auto;padding:10px;display:flex;flex-direction:column;gap:8px;
           border-top:1px solid var(--line2)}
 .adminbox .btn{width:100%;text-align:center}
+.adminbox .btn:disabled{opacity:.6;cursor:default}
+.refresh-msg{font-size:11.5px;color:var(--muted);line-height:1.45}
 .adminbox[hidden]{display:none}
 .adminbox[hidden] + .sidefoot{margin-top:auto}
 .adm-on{display:flex;align-items:center;gap:6px;font-size:12px;font-weight:700;color:var(--accent)}
@@ -159,6 +161,10 @@ tbody tr:last-child td{border-bottom:0}
 .ava{width:26px;height:26px;border-radius:50%;background:var(--line2);flex:none;object-fit:cover}
 .ava.ph{display:grid;place-items:center;font-size:10px;font-weight:800;color:var(--muted)}
 .ava.big{width:60px;height:60px;font-size:21px}
+.avaw{position:relative;width:26px;height:26px;flex:none;display:inline-block;vertical-align:middle}
+.avaw.big{width:60px;height:60px}
+.avaw > .ava{position:absolute;inset:0;width:100%;height:100%}
+.avaw > img.ava{background:var(--card)}
 .nm{font-weight:600;white-space:nowrap}
 .gh{color:var(--muted)}
 .miss{color:var(--warn);font-weight:700}
@@ -170,7 +176,7 @@ tbody tr:last-child td{border-bottom:0}
 .cnt{font-weight:800}
 .plus{color:var(--pos)}
 .minus{color:var(--neg)}
-.badge{display:inline-flex;align-items:center;gap:5px;border-radius:999px;padding:3px 9px;
+.badge{display:inline-flex;align-items:center;gap:5px;border-radius:999px;padding:3px 9px;white-space:nowrap;
        font-size:11.5px;font-weight:700;border:1px solid}
 .badge i{width:6px;height:6px;border-radius:50%;display:block;background:currentColor}
 .b-active{color:var(--st-active);background:var(--st-active-bg);border-color:var(--st-active-line)}
@@ -297,6 +303,7 @@ async function checkAdmin() {
     const res = await fetch(`${API_BASE}/admin/me`, {cache: 'no-store'});
     ADMIN = res.ok ? (await res.json()).username : null;
   } catch { ADMIN = null; }    // 네트워크 오류면 공개 모드로 둔다
+  if (ADMIN) await loadAdminNames();
   renderAdminUi();
   return ADMIN;
 }
@@ -313,8 +320,64 @@ function renderAdminUi() {
   $('#adminbox').hidden = !ADMIN;
   $('#adminbox').innerHTML = ADMIN
     ? `<div class="adm-on"><i></i>관리자 모드<span class="mono">${esc(ADMIN)}</span></div>
+       <button class="btn sm" id="a-refresh" type="button" title="조직 저장소 등록 → 커밋 동기화 → 새 기여자 회원 등록">데이터 갱신</button>
+       <div class="refresh-msg" id="refresh-msg"></div>
        <form method="post" action="/logout"><button class="btn sm" type="submit">로그아웃</button></form>`
     : '';
+  if (ADMIN) bindRefresh();
+}
+
+/* ── 데이터 갱신 버튼 ─────────────────────────────────────────────────────
+   조직 저장소 등록 → 커밋 동기화 → 새 기여자 회원 등록. 서버가 백그라운드로 돌리고
+   화면은 3초마다 진행 상황을 확인한다. 큰 저장소가 있으면 몇 분 걸릴 수 있다. */
+let refreshTimer = null;
+function bindRefresh() {
+  const btn = $('#a-refresh');
+  if (!btn) return;
+  btn.onclick = async () => {
+    if (!confirm('GitHub 에서 조직 저장소와 커밋을 다시 가져옵니다.\n몇 분 걸릴 수 있습니다. 진행할까요?')) return;
+    try {
+      const res = await fetch(`${API_BASE}/admin/refresh`, {method: 'POST'});
+      if (res.status === 401) return authFail();
+      if (!res.ok) { alert(`갱신을 시작하지 못했습니다. (서버 응답 ${res.status})`); return; }
+      watchRefresh(await res.json());
+    } catch (e) { alert('서버에 연결하지 못했습니다.\n' + e.message); }
+  };
+  // 다른 탭에서 시작한 갱신이 아직 돌고 있으면 이어서 표시
+  fetch(`${API_BASE}/admin/refresh/status`, {cache: 'no-store'})
+    .then(r => r.ok ? r.json() : null).then(st => { if (st?.running) watchRefresh(st); }).catch(() => {});
+}
+function watchRefresh(st) {
+  const btn = $('#a-refresh'), msg = $('#refresh-msg');
+  clearTimeout(refreshTimer);
+  if (st.running) {
+    btn.disabled = true;
+    const sec = Math.max(0, Math.round((Date.now() - new Date(st.startedAt)) / 1000));
+    msg.textContent = `갱신 중… ${Math.floor(sec / 60)}분 ${sec % 60}초`;
+    refreshTimer = setTimeout(async () => {
+      try {
+        const res = await fetch(`${API_BASE}/admin/refresh/status`, {cache: 'no-store'});
+        if (res.status === 401) return authFail();
+        watchRefresh(await res.json());
+      } catch { refreshTimer = setTimeout(() => watchRefresh(st), 3000); }
+    }, 3000);
+    return;
+  }
+  btn.disabled = false;
+  msg.textContent = '';
+  if (!st.finishedAt) return;
+  if (!st.ok) { alert('데이터 갱신에 실패했습니다.\n' + (st.error || '')); return; }
+  const im = st.import || {}, sy = st.sync || {};
+  const lines = [
+    '데이터 갱신이 끝났습니다.',
+    '',
+    `새로 등록한 저장소: ${(im.added || []).length}개${(im.added || []).length ? ' — ' + im.added.join(', ') : ''}`,
+    `가져온 커밋: ${fmt(sy.newCommits)}건 (저장소 ${sy.repositories}개)`,
+    `새로 등록한 회원: ${(sy.newMembers || []).length}명${(sy.newMembers || []).length ? ' — ' + sy.newMembers.join(', ') : ''}`
+  ];
+  if ((sy.failed || []).length) lines.push('', '실패한 저장소:', ...sy.failed);
+  alert(lines.join('\n'));
+  location.reload();
 }
 
 /** 관리자 API 가 401 을 돌려줬을 때. 한 번만 알리고 로그인 화면으로 보낸다. */
@@ -328,6 +391,31 @@ function authFail() {
   ADMIN = null;
   renderAdminUi();
   location.href = '/login';
+}
+
+/* ══════════════════════════════════════════════════════════════════════
+   사람 표시 규칙
+   - 공개 화면: GitHub 아이디 + GitHub 프로필 사진. 실명은 /api/bootstrap 에 아예 들어 있지 않다.
+   - 관리자 모드(/admin): 실명. 로그인 뒤 /api/admin/names 로 따로 받아 덮어쓴다.
+   ══════════════════════════════════════════════════════════════════════ */
+const displayName = login => (ADMIN && DB.memberBy[login]?.realName) || login;
+const avatarSrc = login => DB.memberBy[login]?.avatarUrl
+  || `https://github.com/${encodeURIComponent(login)}.png?size=80`;
+/** 프로필 사진. 이니셜을 밑에 깔아두고 사진을 위에 올린다 — 사진을 못 불러오면 이니셜이 보인다. */
+function avatar(login, big = false) {
+  const b = big ? ' big' : '';
+  return `<span class="avaw${b}"><span class="ava ph${b}">${esc(displayName(login).slice(0, 1).toUpperCase())}</span>`
+       + `<img class="ava${b}" src="${esc(avatarSrc(login))}" alt="" loading="lazy" onerror="this.remove()"></span>`;
+}
+
+async function loadAdminNames() {
+  try {
+    const res = await fetch(`${API_BASE}/admin/names`, {cache: 'no-store'});
+    if (!res.ok) return;
+    for (const {login, name} of await res.json()) {
+      if (DB.memberBy[login]) DB.memberBy[login].realName = name;
+    }
+  } catch { /* 이름을 못 받아도 아이디로 보여주면 된다 */ }
 }
 
 /** 명단은 공개 데이터가 아니라 관리자 API 에서 직접 받는다. */
@@ -447,7 +535,7 @@ function activeMembers({from, to, projects = [], min = 1}) {
   const rows = [...by.values()].filter(r => r.commits >= min).map(r => {
     const m = DB.memberBy[r.login] || {};
     return {
-      login: r.login, name: m.name || r.login,
+      login: r.login, name: displayName(r.login),
       avatarUrl: m.avatarUrl || null, registered: !!m.registered, role: m.role || null,
       projectSlugs: [...r.projects],
       projects: [...r.projects].map(s => DB.projectBy[s]?.name || s).sort(),
@@ -734,8 +822,8 @@ function viewOverview() {
           ${recent.length ? recent.map(c => {
             const m = DB.memberBy[c.login] || {};
             return `<tr class="clk" data-go="#/members/${encodeURIComponent(c.login)}">
-              <td style="width:1%"><div class="ava ph">${esc((m.name || c.login).slice(0, 1))}</div></td>
-              <td><div class="nm">${esc(m.name || c.login)}</div>
+              <td style="width:1%">${avatar(c.login)}</td>
+              <td><div class="nm${ADMIN ? '' : ' mono'}">${esc(displayName(c.login))}</div>
                   <div class="hint" style="max-width:340px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(c.message)}</div></td>
               <td class="r"><span class="tag"><i style="background:${DB.projectBy[c.project].color}"></i>${esc(DB.projectBy[c.project].name)}</span>
                   <div class="hint num" style="margin-top:3px">${short(dOf(c))}</div></td></tr>`;
@@ -773,6 +861,7 @@ function viewMembers() {
     const days  = new Set(mine.map(dOf));
     return {
       ...m,
+      name: displayName(m.login),
       status: statusOf(m.login),
       total: mine.length, recent: d90.length, activeDays: days.size,
       first: mine.length ? dOf(mine[0]) : null,
@@ -787,7 +876,7 @@ function viewMembers() {
     (!s.q || (m.name + m.login).toLowerCase().includes(s.q.toLowerCase())) &&
     (!s.status || m.status === s.status));
 
-  const SORTS = {recent: '최근 90일 커밋', total: '총 커밋', activeDays: '활동일', name: '이름'};
+  const SORTS = {recent: '최근 90일 커밋', total: '총 커밋', activeDays: '활동일', name: ADMIN ? '이름' : '아이디'};
   rows.sort((a, b) => s.sort === 'name'
     ? a.name.localeCompare(b.name, 'ko')
     : (b[s.sort] - a[s.sort]) || b.total - a.total);
@@ -806,7 +895,7 @@ function viewMembers() {
       <div class="row"><label class="k">정렬</label>
         <div class="row" id="mem-sort">${Object.entries(SORTS).map(([k, v]) =>
           `<button class="chip${s.sort === k ? ' on' : ''}" data-k="${k}">${v}</button>`).join('')}</div>
-        <input type="search" id="mem-q" placeholder="이름 · GitHub 검색" value="${esc(s.q)}"
+        <input type="search" id="mem-q" placeholder="${ADMIN ? '이름 · GitHub 검색' : 'GitHub 아이디 검색'}" value="${esc(s.q)}"
                style="margin-left:auto;width:200px">
       </div>
     </section>
@@ -821,11 +910,9 @@ function viewMembers() {
           <tr class="clk" data-go="#/members/${encodeURIComponent(m.login)}">
             <td class="idx num">${i + 1}</td>
             <td><div class="who">
-              <div class="ava ph">${esc(m.name.slice(0, 1))}</div>
-              ${m.avatarUrl ? `<img class="ava" src="${esc(m.avatarUrl)}" alt=""
-                   style="margin-left:-26px;background:var(--card)" onerror="this.remove()">` : ''}
-              <div><div class="nm">${esc(m.name)}</div>
-                   <div class="hint mono">${esc(m.login)}</div></div></div></td>
+              ${avatar(m.login)}
+              <div><div class="nm${ADMIN ? '' : ' mono'}">${esc(m.name)}</div>
+                   ${ADMIN ? `<div class="hint mono">${esc(m.login)}</div>` : ''}</div></div></td>
             <td><span class="badge b-${m.status}"><i></i>${STATUS_KO[m.status]}</span></td>
             <td class="r num cnt">${fmt(m.recent)}</td>
             <td class="r num">${fmt(m.total)}</td>
@@ -863,7 +950,7 @@ function viewMember(login) {
       <span class="back" data-go="#/members">← 멤버 목록으로</span></div></section>`;
     return;
   }
-  const name = m?.name || login;
+  const name = displayName(login);
   const days = new Set(mine.map(dOf));
   const add = mine.reduce((a, c) => a + c.additions, 0);
   const del = mine.reduce((a, c) => a + c.deletions, 0);
@@ -889,14 +976,12 @@ function viewMember(login) {
 
     <section class="card">
       <div class="profile">
-        <div class="ava ph big">${esc(name.slice(0, 1))}</div>
-        ${m?.avatarUrl ? `<img class="ava big" src="${esc(m.avatarUrl)}" alt=""
-             style="margin-left:-78px;background:var(--card)" onerror="this.remove()">` : ''}
+        ${avatar(login, true)}
         <div class="meta">
           <h2>${esc(name)} <span class="badge b-${status}" style="vertical-align:5px"><i></i>${STATUS_KO[status]}</span></h2>
           <div class="kv">
             <span>역할 <b>${esc(m?.role || '—')}</b></span>
-            <span>GitHub <b class="mono">${esc(login)}</b></span>
+            ${ADMIN ? `<span>GitHub <b class="mono">${esc(login)}</b></span>` : ''}
             ${m?.joinedOn ? `<span>합류 <b class="num">${m.joinedOn}</b></span>` : ''}
           </div>
         </div>
@@ -1033,7 +1118,7 @@ async function viewReport() {
       </tr></thead><tbody>
         ${reg.length ? reg.map((r, i) => `<tr class="clk" data-go="#/members/${encodeURIComponent(r.login)}">
           <td class="idx num">${i + 1}</td>
-          <td><div class="who"><div class="ava ph">${esc(r.name.slice(0, 1))}</div>
+          <td><div class="who">${avatar(r.login)}
             <span class="nm">${esc(r.name)}</span></div></td>
           <td class="gh mono">${esc(r.login)}</td>
           <td><div class="tags">${r.projectSlugs.map(p =>
@@ -1127,7 +1212,7 @@ async function render() {
     a.classList.toggle('on', a.dataset.r === path || (a.dataset.r === '/members' && path.startsWith('/members'))));
 
   $('#pg-title').textContent = hit.title;
-  $('#pg-sub').textContent = hit === ROUTES[2] ? (DB.memberBy[arg]?.name || arg) : hit.sub;
+  $('#pg-sub').textContent = hit === ROUTES[2] ? displayName(arg) : hit.sub;
   $('#pg-actions').innerHTML = hit.admin
     ? `<button class="btn" id="a-csv">CSV 내려받기</button><button class="btn" id="a-print">인쇄</button>` : '';
 

@@ -239,6 +239,8 @@ repository 테이블에서 excluded 아닌 것들을 돌면서
 | 메서드 | 경로 | 설명 |
 |---|---|---|
 | GET | `/admin` | 관리자 화면 (index.html 을 그대로 forward, 로그인 필요) |
+| GET | `/api/admin/names` | GitHub 아이디 → 실명. 관리자 모드 화면 전용 (공개 `/api/bootstrap`에는 실명 없음) |
+| POST | `/api/admin/repositories/{id}/counted-from?date=YYYY-MM-DD` | 이 날짜 이전 커밋은 HSF 활동이 아님 (이전 커밋 삭제, 비우면 해제) |
 | GET | `/api/admin/me` | 관리자 모드 확인 (200 로그인됨 / 401). `/admin` 화면에서만 호출 |
 | GET | `/api/admin/reports/active-members` | 기간별 참여자 명단 |
 | GET | `/api/admin/reports/active-members.csv` | 같은 명단, CSV |
@@ -746,3 +748,26 @@ export HSF_ADMIN_PASSWORD=...
 ```
 
 `http://localhost:8080` — 로컬 DB(`hsf_dashboard`)에도 같은 데이터가 들어 있다.
+
+
+---
+
+# 16. 2026-10-08 변경 — 저장소 범위 확대 · 공개 화면 아이디 표시
+
+## 저장소 17개 전부 수집
+- 포크도 등록한다. 대신 `repository.counted_from` = 포크 생성일, 그 이전(원본 저장소 이력)은 수집하지 않는다.
+- `cloud_storage` 다시 포함, `counted_from = 2025-01-07` (HSF 저장소 생성일). 외부 오픈소스 이력 2,984건은 들어오지 않는다.
+- `EnCus` 다시 포함 (전체 이력).
+- 위 두 건은 V5 마이그레이션이 처리한다. 포크 4개는 배포 후 `POST /api/admin/repositories/import` 로 등록된다.
+- 포크 이후에 원본에서 병합해 온 커밋(외부 저자)은 걸러지지 않는다. 명단의 "회원 명부에 없는 기여자"로 확인할 것.
+
+## 공개 화면 = GitHub 아이디 + 프로필 사진, 관리자 모드 = 실명
+- `/api/bootstrap` 에서 실명(`name`)을 뺐다. 공개 API 로는 실명이 나가지 않는다.
+- `/admin` 에서 로그인하면 `/api/admin/names` 로 실명을 받아 덮어쓴다 (`displayName()`).
+- 프로필 사진: `avatarUrl`(github_id 기반) → 없으면 `github.com/{login}.png` → 그것도 실패하면 이니셜.
+
+## 수집 대상 15개 · 관리자 화면 "데이터 갱신" 버튼
+- `KoreanUnificationParallelCorpus`, `WICWIU`는 참고용 포크라 제외 (등록 단계 `NOT_HSF_ACTIVITY` + V6 마이그레이션).
+- `/admin` 사이드바의 **데이터 갱신** = 조직 저장소 등록 → 전체 동기화 → 새 기여자 회원 자동 등록. 백그라운드 실행(`POST /api/admin/refresh`, 상태 `GET /api/admin/refresh/status`).
+- 동기화가 끝날 때마다 회원이 아닌 기여자를 회원으로 자동 등록한다(이름 = GitHub 아이디). 명단은 회원만 세기 때문.
+- GitHub 이 502 를 주면 같은 위치에서 페이지 크기를 100 → 50 → 25 → 12 로 줄여 다시 요청한다.

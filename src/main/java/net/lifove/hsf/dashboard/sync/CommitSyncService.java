@@ -29,12 +29,12 @@ public class CommitSyncService {
     private static final Logger log = LoggerFactory.getLogger(CommitSyncService.class);
 
     private static final String HISTORY_QUERY = """
-        query($owner:String!, $name:String!, $since:GitTimestamp!, $cursor:String) {
+        query($owner:String!, $name:String!, $since:GitTimestamp!, $cursor:String, $first:Int!) {
           repository(owner:$owner, name:$name) {
             defaultBranchRef {
               name
               target { ... on Commit {
-                history(since:$since, first:100, after:$cursor) {
+                history(since:$since, first:$first, after:$cursor) {
                   pageInfo { hasNextPage endCursor }
                   nodes {
                     oid committedDate messageHeadline
@@ -69,7 +69,7 @@ public class CommitSyncService {
     /** 등록된 저장소 전부 동기화. 하나가 실패해도 나머지는 계속 진행한다. */
     public Map<String, Object> syncAll() {
         List<Map<String, Object>> repos = jdbc.queryForList(
-                "SELECT id, owner, name, last_synced_at FROM repository WHERE NOT excluded ORDER BY id");
+                "SELECT id, owner, name, last_synced_at, counted_from FROM repository WHERE NOT excluded ORDER BY id");
 
         int total = 0;
         List<String> failed = new ArrayList<>();
@@ -80,23 +80,67 @@ public class CommitSyncService {
                         ((Number) r.get("id")).longValue(),
                         (String) r.get("owner"),
                         (String) r.get("name"),
-                        toOffset(r.get("last_synced_at")));
+                        toOffset(r.get("last_synced_at")),
+                        toLocalDate(r.get("counted_from")));
             } catch (Exception e) {
                 log.error("동기화 실패: {}", full, e);
                 failed.add(full + " — " + e.getMessage());
             }
         }
-        return Map.of("repositories", repos.size(), "newCommits", total, "failed", failed);
+        List<String> newMembers = registerNewMembers();
+        return Map.of("repositories", repos.size(), "newCommits", total, "failed", failed,
+                      "newMembers", newMembers);
+    }
+
+    /**
+     * 회원과 연결되지 않은 기여자 계정을 회원으로 등록한다 (이름은 우선 GitHub 아이디).
+     *
+     * 명단(마일리지 제출용)은 회원만 세기 때문에, 새로 수집한 저장소의 기여자가
+     * 회원이 아니면 명단에서 빠진다. 그래서 동기화가 끝날 때마다 자동으로 등록한다.
+     * 실명은 나중에 PATCH /api/admin/members/{id} 로 채운다.
+     */
+    public List<String> registerNewMembers() {
+        List<Map<String, Object>> orphans = jdbc.queryForList("""
+                SELECT ga.id, ga.login, min(c.committed_at)::date AS first_commit
+                  FROM github_account ga
+                  JOIN commit_log c ON c.author_id = ga.id
+                  JOIN repository r ON r.id = c.repository_id AND NOT r.excluded
+                 WHERE ga.member_id IS NULL AND NOT ga.is_bot
+                 GROUP BY ga.id, ga.login
+                """);
+        List<String> created = new ArrayList<>();
+        for (Map<String, Object> o : orphans) {
+            Long memberId = jdbc.queryForObject(
+                    "INSERT INTO member (name, role, joined_at) VALUES (?, 'contributor', ?) RETURNING id",
+                    Long.class, o.get("login"), o.get("first_commit"));
+            jdbc.update("UPDATE github_account SET member_id = ? WHERE id = ?", memberId, o.get("id"));
+            created.add((String) o.get("login"));
+        }
+        if (!created.isEmpty()) log.info("새 기여자 회원 등록 {}명: {}", created.size(), created);
+        return created;
     }
 
     /** 저장소 1개 동기화. 저장(또는 갱신)된 커밋 수를 돌려준다. */
-    @Transactional
     public int syncRepository(long repoId, String owner, String name, OffsetDateTime lastSynced) {
+        return syncRepository(repoId, owner, name, lastSynced, null);
+    }
+
+    /**
+     * @param countedFrom 이 날짜(KST) 이전 커밋은 가져오지 않는다. 포크·외부 오픈소스 이력을 거르는 용도.
+     *                    null 이면 전체 이력.
+     */
+    @Transactional
+    public int syncRepository(long repoId, String owner, String name,
+                              OffsetDateTime lastSynced, java.time.LocalDate countedFrom) {
         // 마지막 동기화보다 하루 앞에서부터 다시 훑는다.
         // 늦게 푸시된 커밋을 놓치지 않기 위해서다. sha 기준 upsert 라 중복은 생기지 않는다.
         OffsetDateTime since = (lastSynced != null)
                 ? lastSynced.minusDays(props.sync().overlapDays())
                 : OffsetDateTime.parse("2000-01-01T00:00:00Z");
+        if (countedFrom != null) {
+            OffsetDateTime floor = countedFrom.atStartOfDay(java.time.ZoneId.of("Asia/Seoul")).toOffsetDateTime();
+            if (since.isBefore(floor)) since = floor;
+        }
 
         Long syncLogId = jdbc.queryForObject(
                 "INSERT INTO sync_log (repository_id, status) VALUES (?, 'RUNNING') RETURNING id",
@@ -106,6 +150,9 @@ public class CommitSyncService {
             int saved = 0;
             String cursor = null;
             boolean hasNext = true;
+            // 변경량이 큰 저장소는 100건씩 요청하면 GitHub 가 502 를 자주 준다.
+            // 실패하면 같은 위치에서 페이지 크기를 반으로 줄여 다시 요청한다 (100 → 50 → 25 → 12).
+            int pageSize = 100;
 
             while (hasNext) {
                 Map<String, Object> vars = new HashMap<>();
@@ -116,8 +163,17 @@ public class CommitSyncService {
                 // Instant.toString() 은 항상 초를 포함한다.
                 vars.put("since", since.toInstant().toString());
                 vars.put("cursor", cursor);
+                vars.put("first", pageSize);
 
-                Map<String, Object> data = github.query(HISTORY_QUERY, vars);
+                Map<String, Object> data;
+                try {
+                    data = github.query(HISTORY_QUERY, vars);
+                } catch (RuntimeException e) {
+                    if (pageSize <= 12) throw e;
+                    pageSize /= 2;
+                    log.warn("{}/{}: 요청 실패, 페이지 크기를 {}로 줄여 다시 시도", owner, name, pageSize);
+                    continue;
+                }
                 Map<String, Object> branch = obj(data, "repository", "defaultBranchRef");
                 if (branch.isEmpty()) {
                     log.warn("{}/{}: 기본 브랜치를 찾을 수 없음 (빈 저장소이거나 접근 권한 없음)", owner, name);
@@ -216,6 +272,14 @@ public class CommitSyncService {
                 INSERT INTO commit_email (email, account_id) VALUES (?,?)
                 ON CONFLICT (email) DO NOTHING
                 """, email, accountId);
+    }
+
+    /** DATE 컬럼은 드라이버에 따라 java.sql.Date 또는 LocalDate 로 온다. */
+    private static java.time.LocalDate toLocalDate(Object v) {
+        if (v == null) return null;
+        if (v instanceof java.time.LocalDate d) return d;
+        if (v instanceof java.sql.Date d) return d.toLocalDate();
+        return java.time.LocalDate.parse(v.toString().substring(0, 10));
     }
 
     /**

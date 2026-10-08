@@ -21,6 +21,8 @@ import java.util.Map;
  * 커밋이 만 건을 넘어가면 이 방식 대신 집계 API 를 따로 두는 게 낫다.
  *
  * 학번·학과는 여기 들어가지 않는다. 그 정보는 /api/admin/** 로만 나간다.
+ * 실명도 넣지 않는다. 공개 화면은 GitHub 아이디로만 보여주고,
+ * 관리자 모드가 /api/admin/names 로 실명을 따로 받는다.
  */
 @RestController
 @RequestMapping("/api")
@@ -55,7 +57,6 @@ public class PublicController {
 
         List<Map<String, Object>> members = jdbc.queryForList("""
                 SELECT ga.login,
-                       coalesce(m.name, ga.login) AS name,
                        m.role,
                        m.joined_at::text AS "joinedOn",
                        (m.id IS NOT NULL)  AS registered,
