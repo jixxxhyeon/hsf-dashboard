@@ -48,7 +48,7 @@ public class SecurityConfig {
     public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
         http
             .authorizeHttpRequests(auth -> auth
-                .requestMatchers("/admin", "/admin/", "/api/admin/**").hasRole("ADMIN")
+                .requestMatchers("/admin", "/admin/**", "/api/admin/**").hasRole("ADMIN")
                 .anyRequest().permitAll())
 
             // 로그인 화면은 직접 만든 것을 쓴다 (templates/login.html).

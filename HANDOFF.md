@@ -772,3 +772,9 @@ export HSF_ADMIN_PASSWORD=...
 - `/admin` 사이드바의 **데이터 갱신** = 조직 저장소 등록 → 전체 동기화 → 새 기여자 회원 자동 등록. 백그라운드 실행(`POST /api/admin/refresh`, 상태 `GET /api/admin/refresh/status`).
 - 동기화가 끝날 때마다 회원이 아닌 기여자를 회원으로 자동 등록한다(이름 = GitHub 아이디). 명단은 회원만 세기 때문.
 - GitHub 이 502 를 주면 같은 위치에서 페이지 크기를 100 → 50 → 25 → 12 로 줄여 다시 요청한다.
+
+## 주소에서 '#' 제거 (History API, 2026-10-08)
+- 공개: `/`, `/members`, `/members/{login}` · 관리자: `/admin`(→ `/admin/report`), `/admin/overview`, `/admin/members`, `/admin/members/{login}`, `/admin/report`
+- 서버 `LoginController.page()` 가 위 경로에 `index.html` 을 forward 한다. 새 화면 경로를 추가하면 여기에도 추가해야 새로고침 시 404 가 나지 않는다.
+- `SecurityConfig`: `/admin/**` 로그인 필요.
+- 예전 `#/...` 링크는 화면이 새 주소로 바꿔준다 (`/admin#/report` → `/admin/report`).
