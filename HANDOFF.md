@@ -768,6 +768,7 @@ export HSF_ADMIN_PASSWORD=...
 
 ## 수집 대상 15개 · 관리자 화면 "데이터 갱신" 버튼
 - `KoreanUnificationParallelCorpus`, `WICWIU`는 참고용 포크라 제외 (등록 단계 `NOT_HSF_ACTIVITY` + V6 마이그레이션).
+- `HandongSF.github.io`(조직 홈페이지, 테마 포크)도 제외 (V7). 이 저장소에서만 커밋해 자동 등록됐던 회원도 V7 이 정리한다. 수집 대상은 14개.
 - `/admin` 사이드바의 **데이터 갱신** = 조직 저장소 등록 → 전체 동기화 → 새 기여자 회원 자동 등록. 백그라운드 실행(`POST /api/admin/refresh`, 상태 `GET /api/admin/refresh/status`).
 - 동기화가 끝날 때마다 회원이 아닌 기여자를 회원으로 자동 등록한다(이름 = GitHub 아이디). 명단은 회원만 세기 때문.
 - GitHub 이 502 를 주면 같은 위치에서 페이지 크기를 100 → 50 → 25 → 12 로 줄여 다시 요청한다.

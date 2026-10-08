@@ -46,11 +46,12 @@ public class RepositoryImportService {
 
     /**
      * HSF 활동으로 세지 않는 저장소 (운영진 결정, 2026-10).
-     * 남의 저장소를 참고용으로 포크만 해 둔 것들이라 등록하지 않는다.
+     * 참고용으로 포크만 해 둔 저장소, 조직 홈페이지(테마 포크)는 등록하지 않는다.
      */
     static final java.util.Set<String> NOT_HSF_ACTIVITY = java.util.Set.of(
             "KoreanUnificationParallelCorpus",
-            "WICWIU");
+            "WICWIU",
+            "HandongSF.github.io");
 
     private final JdbcTemplate jdbc;
     private final GithubGraphQlClient github;
